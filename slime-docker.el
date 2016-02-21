@@ -3,7 +3,7 @@
 ;; URL: https://github.com/daewok/slime-docker
 ;; Package-Requires: ((emacs "24") (slime "2.16") (docker-tramp "0.1") (cl-lib "0.5"))
 ;; Keywords: docker, lisp, slime
-;; Version: 0.2
+;; Version: 0.3
 
 
 ;;; License:
