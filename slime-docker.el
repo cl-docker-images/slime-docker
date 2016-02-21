@@ -77,6 +77,10 @@ process inside the Docker container.
 
 For KEYWORD-ARGS see `slime-docker-start'")
 
+(defvar slime-docker-default-lisp nil
+  "*The name of the default Lisp implementation for `slime-docker'.
+See `slime-docker-implementations'")
+
 (defvar slime-docker-cid nil
   "A buffer local variable in the inferior proccess.")
 
@@ -496,6 +500,11 @@ DOCKER-COMMAND is the command to use when interacting with
   "Convenience to run `slime-docker-start' with OPTIONS."
   (apply #'slime-docker-start options))
 
+(defun slime-docker-lisp-options ()
+  (let ((slime-lisp-implementations slime-docker-implementations)
+        (slime-default-lisp slime-docker-default-lisp))
+    (slime-lisp-options)))
+
 (defun slime-docker-read-interactive-args ()
   "Return the list of args which should be passed to `slime-docker-start'.
 
@@ -506,7 +515,7 @@ The rules for selecting the arguments are rather complicated:
   `inferior-lisp-program' as fallback.
 
 - If the table `slime-docker-implementations' is non-nil use the
-  implementation with name `slime-default-lisp' or if
+  implementation with name `slime-docker-default-lisp' or if
   that's nil the first entry in the table.
 
 - If the `prefix-arg' is `-', prompt for one of the registered
@@ -515,7 +524,7 @@ The rules for selecting the arguments are rather complicated:
 - If the `prefix-arg' is positive, read the command to start the
   process."
   (let ((table slime-docker-implementations))
-    (cond ((not current-prefix-arg) (slime-lisp-options))
+    (cond ((not current-prefix-arg) (slime-docker-lisp-options))
           ((eq current-prefix-arg '-)
            (let ((key (completing-read
                        "Lisp name: " (mapcar (lambda (x)
@@ -544,7 +553,7 @@ COMMAND is the command to run in the Docker container."
   (interactive)
   (let ((inferior-lisp-program (or command inferior-lisp-program)))
     (slime-docker-start* (cond ((and command (symbolp command))
-                                (slime-lisp-options command))
+                                (slime-docker-lisp-options command))
                                (t (slime-docker-read-interactive-args))))))
 
 (provide 'slime-docker)
