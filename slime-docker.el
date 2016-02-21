@@ -133,26 +133,28 @@ return the argument that should be passed to docker run to set variable to value
                "Unable to determine external port number.")
     (string-to-number (match-string 1 port-string))))
 
-(defun slime-docker-make-docker-args (program program-args
-                                              cid-file
-                                              image-name image-tag
-                                              rm mounts env directory
-                                              uid)
+(defun slime-docker-make-docker-args (args)
   "Given the user specified arguments, return a list of arguments to be passed to Docker to start a container."
-  `("run"
-    "-i"
-    ,(concat "--cidfile=" cid-file)
-    "-p" "127.0.0.1::4005"
-    ,(format "--rm=%s" (if rm "true" "false"))
-    ,@(mapcar #'slime-docker-mount-to-arg mounts)
-    ,@(mapcar #'slime-docker-env-to-arg env)
-    ,@(when uid
-        (list (format "--user=%s" uid)))
-    ,@(when directory
-        (list (format "--workdir=%s" directory)))
-    ,(format "%s:%s" image-name image-tag)
-    ,program
-    ,@program-args))
+  (cl-destructuring-bind (&key program program-args
+                               cid-file
+                               image-name image-tag
+                               rm mounts env directory
+                               uid
+                               &allow-other-keys) args
+    `("run"
+      "-i"
+      ,(concat "--cidfile=" cid-file)
+      "-p" "127.0.0.1::4005"
+      ,(format "--rm=%s" (if rm "true" "false"))
+      ,@(mapcar #'slime-docker-mount-to-arg mounts)
+      ,@(mapcar #'slime-docker-env-to-arg env)
+      ,@(when uid
+          (list (format "--user=%s" uid)))
+      ,@(when directory
+          (list (format "--workdir=%s" directory)))
+      ,(format "%s:%s" image-name image-tag)
+      ,program
+      ,@program-args)))
 
 (defun slime-docker-read-cid (cid-file)
   "Given a CID-FILE where a continer ID has been written, read the container ID from it."
@@ -162,11 +164,7 @@ return the argument that should be passed to docker run to set variable to value
       (buffer-string))))
 
 
-(defun slime-docker-start-docker (program program-args
-                                          buffer
-                                          image-name image-tag
-                                          rm mounts env directory
-                                          uid)
+(defun slime-docker-start-docker (buffer args)
   "Start a Docker container in the given buffer.  Return the process."
   (with-current-buffer (get-buffer-create buffer)
     (comint-mode)
@@ -175,11 +173,7 @@ return the argument that should be passed to docker run to set variable to value
           (cid-file (make-temp-file "slime-docker")))
       (delete-file cid-file)
       (comint-exec (current-buffer) "docker-lisp" "docker" nil
-                   (slime-docker-make-docker-args program program-args
-                                                  cid-file
-                                                  image-name image-tag
-                                                  rm mounts env directory
-                                                  uid))
+                   (slime-docker-make-docker-args (cl-list* :cid-file cid-file args)))
       (make-local-variable 'slime-docker-cid)
       ;; Wait for cid-file to exist.
       (while (not (file-exists-p cid-file))
@@ -192,26 +186,16 @@ return the argument that should be passed to docker run to set variable to value
       ;; TODO: Run hooks
       proc)))
 
-(defun slime-docker-maybe-start-docker (program program-args
-                                                buffer
-                                                image-name image-tag
-                                                rm mounts env directory
-                                                uid)
+(defun slime-docker-maybe-start-docker (args)
   "Return a new or existing docker process."
-  (cond
-   ((not (comint-check-proc buffer))
-    (slime-docker-start-docker program program-args
-                               buffer
-                               image-name image-tag
-                               rm mounts env directory
-                               uid))
-   ;; TODO: Prompt user to see if the existing process should be reinitialized.
-   (t
-    (slime-docker-start-docker program program-args
-                               (generate-new-buffer-name buffer)
-                               image-name image-tag
-                               rm mounts env directory
-                               uid))))
+  (cl-destructuring-bind (&key buffer &allow-other-keys) args
+    (cond
+     ((not (comint-check-proc buffer))
+      (slime-docker-start-docker buffer args))
+     ;; TODO: Prompt user to see if the existing process should be reinitialized.
+     (t
+      (slime-docker-start-docker (generate-new-buffer-name buffer)
+                                 args)))))
 
 
 ;;;; Tramp Integration
@@ -386,50 +370,40 @@ and edit files in the spawned container.
 
 PROGRAM and PROGRAM-ARGS are the filename and argument strings
   for the Lisp process.
-
 IMAGE-NAME is a string naming the image that should be used to
   start the container.
-
 IMAGE-TAG is a string nameing the tag to use. Defaults to
   \"latest\".
-
 INIT is a function that should return a string to load and start
   Swank. The function will be called with no arguments - but that
   may change in a future version.
-
 CODING-SYSTEM is ignored.
-
 ENV an alist of environment variables to set in the docker
   container.
-
 BUFFER the name of the buffer to use for the subprocess.
-
 NAME a symbol to describe the Lisp implementation.
-
 DIRECTORY set this as the working directory in the container.
-
 RM if true, the container is removed when the process closes.
-
 MOUNTS a list describing the voluments to mount into the
   container. It is of the form:
   (((HOST-PATH . CONTAINER-PATH) &key READ-ONLY) ... )
-
 UID if specified, sets the UID of the Lisp process in the
   container.
-
 SLIME-MOUNT-PATH the location where to mount SLIME into the
   container defaults to
   /usr/local/share/common-lisp/source/slime/
-
 SLIME-MOUNT-READ-ONLY if non-NIL, SLIME is mounted into the
   container as read-only. Defaults to T."
-  (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
+  (let* ((args (list :program program :program-args program-args
+                     :directory directory :name name :buffer buffer
+                     :image-name image-name :image-tag image-tag
+                     :rm rm :env env :init init :mounts mounts
+                     :slime-mount-path slime-mount-path
+                     :slime-read-only slime-mount-read-only
+                     :uid uid))
+         (mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
                            mounts))
-         (proc (slime-docker-maybe-start-docker program program-args
-                                               buffer
-                                               image-name image-tag
-                                               rm mounts env directory
-                                               uid)))
+         (proc (slime-docker-maybe-start-docker args)))
     (pop-to-buffer (process-buffer proc))
     (slime-docker-connect proc init mounts)))
 
