@@ -1,7 +1,65 @@
-;; -*- lexical-binding: t; -*-
+;;; slime-docker.el --- Integration of SLIME with Docker containers. -*- lexical-binding: t; -*-
+
+;; URL: https://github.com/daewok/slime-docker
+;; Package-Requires: ((emacs "24") (slime "2.16") (docker-tramp "0.1") (cl-lib "0.5"))
+;; Keywords: docker, lisp, slime
+;; Version: 0.1
+
+
+;;; License:
+
+;;   The MIT License (MIT)
+;;
+;;   Copyright (c) 2016 Eric Timmons
+;;
+;;   Permission is hereby granted, free of charge, to any person obtaining a
+;;   copy of this software and associated documentation files (the "Software"),
+;;   to deal in the Software without restriction, including without limitation
+;;   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;;   and/or sell copies of the Software, and to permit persons to whom the
+;;   Software is furnished to do so, subject to the following conditions:
+;;
+;;   The above copyright notice and this permission notice shall be included in
+;;   all copies or substantial portions of the Software.
+;;
+;;   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;;   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;;   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+;;   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;;   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;;   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;;   DEALINGS IN THE SOFTWARE.
+
+
+;;; Commentary:
+
+;; slime-docker provides an easy bridge between SLIME and Lisps running in
+;; Docker containers.  It can launch a container from an image, start a Lisp,
+;; connect to it using SLIME, and set up filename translations (if the
+;; slime-tramp contrib is enabled).
+;;
+;; To get started, describe the Lisp implementations and Docker images you want
+;; to use in the variable `slime-docker-implementations'.  Then, run
+;; `slime-docker' and away you go.
+;;
+;; The default image used by this package is daewok/lisp-devel:latest
+;; (https://hub.docker.com/r/daewok/lisp-devel/)
+;;
+;; SLIME is hard to use directly with Docker containers because its
+;; initialization routine is not very flexible.  It requires that both Lisp and
+;; Emacs have access to the same filesystem (so the port Swank is listening on
+;; can be shared) and that the port Swank listens on is the same port to which
+;; SLIME has to connect.  Neither of these are necessarily true with Docker.
+;;
+;; This works around this by watching the stdout of the Lisp process to figure
+;; out when Swank is ready to accept connections.  It also queries the Docker
+;; daemon to determine which port 4005 has been forwarded to.
+
+;;; Code:
 
 (require 'slime)
 (require 'docker-tramp)
+(require 'cl-lib)
 
 
 ;;;; Variable Definitions
@@ -29,6 +87,7 @@ For KEYWORD-ARGS see `slime-docker-start'")
 ;;;; Constructing Docker Containers
 
 (defun slime-docker-sanitize-pathname (pathname)
+  "If on Windows, sanitize PATHNAME by returning what the path would be in the docker machine."
   (cond ((string-equal system-type "windows-nt")
          (unless (string-match "^.\\(:\\)/.*" pathname)
            (error "Unable to sanitize %s" pathname))
@@ -36,9 +95,11 @@ For KEYWORD-ARGS see `slime-docker-start'")
         (t pathname)))
 
 (defun slime-docker-mount-to-arg (mount)
-  "Given a mount description of the form
+  "Convert a MOUNT description to a Docker argument.
 
-((HOST-PATH . CONTAINER-PATH) &key READ-ONLY)
+Given a mount description of the form:
+
+\((HOST-PATH . CONTAINER-PATH) &key READ-ONLY)
 
 return the argument that should be passed to docker run to mount this volume."
   (cl-destructuring-bind ((host-vol . container-vol) &key read-only)
@@ -49,21 +110,23 @@ return the argument that should be passed to docker run to mount this volume."
       base-string)))
 
 (defun slime-docker-env-to-arg (e)
-  "Given an environment description of the form
+  "Convert E, a pair, to a Docker argument.
 
-(VARIABLE . VALUE)
+Given an environment description of the form
+
+\(VARIABLE . VALUE)
 
 return the argument that should be passed to docker run to set variable to value."
   (cl-destructuring-bind (var . val) e
     (concat "--env=" var "=" val)))
 
 (defun slime-docker--cid (proc)
-  "Given a Docker process, return the container ID."
+  "Given a Docker PROC, return the container ID."
   (with-current-buffer (process-buffer proc)
     slime-docker-cid))
 
 (defun slime-docker-port (proc)
-  "Given a Docker process, return the port that 4005 is mapped to."
+  "Given a Docker PROC, return the port that 4005 is mapped to."
   (let ((port-string (shell-command-to-string
                       (format "docker port %S 4005" (slime-docker--cid proc)))))
     (cl-assert (string-match ".*:\\([0-9]*\\)$" port-string)
@@ -75,8 +138,7 @@ return the argument that should be passed to docker run to set variable to value
                                               image-name image-tag
                                               rm mounts env directory
                                               uid)
-  "Given the user specified arguments, return a list of arguments
-to be passed to Docker to start a container."
+  "Given the user specified arguments, return a list of arguments to be passed to Docker to start a container."
   `("run"
     "-i"
     ,(concat "--cidfile=" cid-file)
@@ -93,8 +155,7 @@ to be passed to Docker to start a container."
     ,@program-args))
 
 (defun slime-docker-read-cid (cid-file)
-  "Given a file where a continer ID has been written, read the
-container ID from it."
+  "Given a CID-FILE where a continer ID has been written, read the container ID from it."
   (save-excursion
     (with-temp-buffer
       (insert-file-contents cid-file)
@@ -106,8 +167,7 @@ container ID from it."
                                           image-name image-tag
                                           rm mounts env directory
                                           uid)
-  "Start a Docker container in the given buffer. Return the
-process."
+  "Start a Docker container in the given buffer.  Return the process."
   (with-current-buffer (get-buffer-create buffer)
     (comint-mode)
     (erase-buffer)
@@ -157,25 +217,34 @@ process."
 ;;;; Tramp Integration
 
 (defun slime-docker-hostname (proc)
+  "Given a Docker PROC, return its hostname."
   (substring (slime-docker--cid proc) 0 12))
 
-(defun slime-docker-translate-filename->emacs (hostname mounts lisp-filename)
+(defun slime-docker-translate-filename->emacs (lisp-filename mounts hostname)
+  "Translate LISP-FILENAME to a filename that Emacs can open.
+
+MOUNTS is the mounts description that Docker was started with.
+
+HOSTNAME is the hostname of the Docker container."
   ;; First, find the matching mount.
   (let ((matching-mount
-         (find-if (lambda (x) (string-match (concat "^" (cdr (first x))) lisp-filename))
-                  mounts)))
+         (cl-find-if (lambda (x) (string-match (concat "^" (cdr (car x))) lisp-filename))
+                     mounts)))
     (if matching-mount
-        (replace-match (car (first matching-mount)) nil t lisp-filename)
+        (replace-match (car (car matching-mount)) nil t lisp-filename)
       ;; else, fall back to TRAMP
       (tramp-make-tramp-file-name "docker" nil hostname lisp-filename))))
 
-(defun slime-docker-translate-filename->lisp (mounts emacs-filename)
+(defun slime-docker-translate-filename->lisp (emacs-filename mounts)
+  "Translate the EMACS-FILENAME into a filename that Lisp can open.
+
+MOUNTS is the mounts description that Docker was started with."
   ;; First, find the matching mount.
   (let ((matching-mount
-         (find-if (lambda (x) (string-match (concat "^" (car (first x))) emacs-filename))
-                  mounts)))
+         (cl-find-if (lambda (x) (string-match (concat "^" (car (car x))) emacs-filename))
+                     mounts)))
     (if matching-mount
-        (replace-match (cdr (first matching-mount)) nil t emacs-filename)
+        (replace-match (cdr (car matching-mount)) nil t emacs-filename)
       ;; else, fall back to TRAMP
       (if (tramp-tramp-file-p emacs-filename)
           (tramp-file-name-localname
@@ -200,15 +269,22 @@ process."
                (funcall (read-from-string "swank:create-server"))))))
 
 (defun slime-docker-start-swank-server (proc init)
+  "Start a swank server in Docker PROC.
+
+INIT is a functio that generates the string to start SWANK."
   (with-current-buffer (process-buffer proc)
     (let ((str (funcall init)))
       (goto-char (process-mark proc))
       (insert-before-markers str)
       (process-send-string proc str))))
 
-(defun slime-docker-poll-stdout (proc retries attempt)
-  "Get the process buffer contents, and try to find the string:
-';; Swank started at port: [number].'"
+(defun slime-docker-poll-stdout (proc _retries attempt)
+  "Return T when swank is ready for connections.
+
+Get the PROC buffer contents, and try to find the string:
+';; Swank started at port: [number].'
+
+ATTEMPT is an integer describing which attempt we are on."
   (unless (active-minibuffer-window)
     (message "Polling Lisp stdout for Swank start message .. %d (Abort with `M-x slime-abort-connection'.)"
              attempt))
@@ -219,10 +295,12 @@ process."
         t))))
 
 (defun slime-docker-connected-hook-function ()
-  "A function that unsets the inferior process for the connection
-once all other hooks have run. Needed to work around
-`slime-quit-lisp' killing its inferior buffer, which doesn't
-give docker time to remove the container."
+  "A function that is run once SLIME is connected.
+
+Unsets the inferior process for the connection once all other
+hooks have run.  Needed to work around `slime-quit-lisp' killing
+its inferior buffer, which doesn't give docker time to remove the
+container."
   (let* ((c (slime-connection))
          (proc (slime-inferior-process c)))
     (when (slime-docker--cid proc)
@@ -232,6 +310,17 @@ give docker time to remove the container."
 (add-hook 'slime-connected-hook 'slime-docker-connected-hook-function t)
 
 (defun slime-docker-connect-when-ready (proc retries attempt mounts)
+  "Connect to SWANK when it is ready for connections.
+
+Checks Lisp's stdout in PROC to see if SWANK is ready.  If it is,
+connects.
+
+Otherwise, if there are RETRIES remaining, schedules itself to be
+run again in the future.
+
+ATTEMPT is a number saying which attempt this is.
+
+MOUNTS is the mounts description Docker was started with."
   (slime-cancel-connect-retry-timer)
   (let ((result (slime-docker-poll-stdout proc retries attempt))
         (try-again-p t))
@@ -246,9 +335,9 @@ give docker time to remove the container."
         (slime-set-inferior-process c proc)
         (push (list (concat "^" hostname "$")
                     (lambda (emacs-filename)
-                      (slime-docker-translate-filename->lisp mounts emacs-filename))
+                      (slime-docker-translate-filename->lisp emacs-filename mounts))
                     (lambda (lisp-filename)
-                      (slime-docker-translate-filename->emacs hostname mounts lisp-filename)))
+                      (slime-docker-translate-filename->emacs lisp-filename mounts hostname)))
               slime-filename-translations)))
      ((and retries (zerop retries))
       (setq try-again-p nil)
@@ -264,6 +353,11 @@ give docker time to remove the container."
                             mounts)))))
 
 (defun slime-docker-connect (proc init mounts)
+  "Start SWANK in PROC and connect to it.
+
+INIT is a function that returns the string to start SWANK.
+
+MOUNTS is the mounts description Docker was started with."
   (slime-docker-start-swank-server proc init)
   (slime-docker-connect-when-ready proc nil 0 mounts))
 
@@ -329,8 +423,8 @@ SLIME-MOUNT-PATH the location where to mount SLIME into the
 
 SLIME-MOUNT-READ-ONLY if non-NIL, SLIME is mounted into the
   container as read-only. Defaults to T."
-  (let* ((mounts (list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
-                        mounts))
+  (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
+                           mounts))
          (proc (slime-docker-maybe-start-docker program program-args
                                                buffer
                                                image-name image-tag
@@ -340,9 +434,13 @@ SLIME-MOUNT-READ-ONLY if non-NIL, SLIME is mounted into the
     (slime-docker-connect proc init mounts)))
 
 (defun slime-docker-start* (options)
+  "Convenience to run `slime-docker-start' with OPTIONS."
   (apply #'slime-docker-start options))
 
 (defun slime-docker (&optional command)
+  "Launch a Lisp process in a Docker container and connect SLIME to it.
+
+COMMAND is the command to run in the Docker container."
   (interactive)
   (let ((inferior-lisp-program (or command inferior-lisp-program)))
     (slime-docker-start* (cond ((and command (symbolp command))
@@ -355,7 +453,7 @@ SLIME-MOUNT-READ-ONLY if non-NIL, SLIME is mounted into the
 
 The rules for selecting the arguments are rather complicated:
 
-- In the most common case, i.e. if there's no prefix-arg in
+- In the most common case, i.e. if there's no `prefix-arg' in
   effect and if `slime-docker-implementations' is nil, use
   `inferior-lisp-program' as fallback.
 
@@ -363,10 +461,10 @@ The rules for selecting the arguments are rather complicated:
   implementation with name `slime-default-lisp' or if
   that's nil the first entry in the table.
 
-- If the prefix-arg is `-', prompt for one of the registered
+- If the `prefix-arg' is `-', prompt for one of the registered
   lisps.
 
-- If the prefix-arg is positive, read the command to start the
+- If the `prefix-arg' is positive, read the command to start the
   process."
   (let ((table slime-docker-implementations))
     (cond ((not current-prefix-arg) (slime-lisp-options))
@@ -391,3 +489,5 @@ The rules for selecting the arguments are rather complicated:
                      :coding-system coding-system)))))))
 
 (provide 'slime-docker)
+
+;;; slime-docker.el ends here
