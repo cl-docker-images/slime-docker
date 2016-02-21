@@ -272,6 +272,10 @@ process."
                                    uid)
   "Start a Docker container and Lisp process in the container then connect to it.
 
+If the slime-tramp contrib is also loaded (highly recommended),
+this will also set up the appropriate tramp translations to view
+and edit files in the spawned container.
+
 PROGRAM and PROGRAM-ARGS are the filename and argument strings
   for the Lisp process.
 
