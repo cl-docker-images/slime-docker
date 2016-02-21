@@ -213,7 +213,7 @@ process."
     (message "Polling Lisp stdout for Swank start message .. %d (Abort with `M-x slime-abort-connection'.)"
              attempt))
   (with-current-buffer (process-buffer proc)
-    (let ((match (string-match-p ";; Swank started at port: [0-9]*." (buffer-string))))
+    (let ((match (string-match-p ";; Swank started at port: 4005." (buffer-string))))
       (when match
         (message "match: %S" match)
         t))))
@@ -227,6 +227,7 @@ process."
       (setq retries result))
      (result
       (setq try-again-p nil)
+      (sit-for 0.2)
       (let ((c (slime-connect "127.0.0.1" (slime-docker-port proc)))
             (hostname (slime-docker-hostname proc)))
         (slime-set-inferior-process c proc)
