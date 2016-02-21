@@ -218,6 +218,19 @@ process."
         (message "match: %S" match)
         t))))
 
+(defun slime-docker-connected-hook-function ()
+  "A function that unsets the inferior process for the connection
+once all other hooks have run. Needed to work around
+`slime-quit-lisp' killing its inferior buffer, which doesn't
+give docker time to remove the container."
+  (let* ((c (slime-connection))
+         (proc (slime-inferior-process c)))
+    (when (slime-docker--cid proc)
+      (message "In docker hook.")
+      (slime-set-inferior-process c nil))))
+
+(add-hook 'slime-connected-hook 'slime-docker-connected-hook-function t)
+
 (defun slime-docker-connect-when-ready (proc retries attempt mounts)
   (slime-cancel-connect-retry-timer)
   (let ((result (slime-docker-poll-stdout proc retries attempt))
