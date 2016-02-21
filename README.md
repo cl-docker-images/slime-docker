@@ -1,4 +1,4 @@
-[![MELPA](http://melpa.org/packages/slime-docker-badge.svg)](http://melpa.org/#/slime-docker)[![MELPA Stable](http://stable.melpa.org/packages/slime-docker-badge.svg)](http://stable.melpa.org/#/slime-docker)
+[![MELPA](http://melpa.org/packages/slime-docker-badge.svg)](http://melpa.org/#/slime-docker) [![MELPA Stable](http://stable.melpa.org/packages/slime-docker-badge.svg)](http://stable.melpa.org/#/slime-docker)
 # slime-docker.el #
 
 This emacs package is designed to easily integrate SLIME with Lisps running in
@@ -16,7 +16,7 @@ files that are both locally on your machine and inside the container.
 This package defaults to using
 [`daewok/lisp-devel:latest`](https://hub.docker.com/r/daewok/lisp-devel/) as the
 Docker image. It contains SBCL, ABCL, CCL, and ECL along with Quicklisp and the
-external libraries necessary to compile most of th epackages in Quicklisp.
+external libraries necessary to compile most of the packages in Quicklisp.
 
 ## Why not use SLIME directly? ##
 
