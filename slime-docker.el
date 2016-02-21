@@ -83,6 +83,30 @@ For KEYWORD-ARGS see `slime-docker-start'")
 (defvar slime-docker-inferior-lisp-program-history '()
   "History list of command strings.  Used by `slime-docker'.")
 
+(defvar slime-docker-path nil
+  "Directory containing the slime-docker package.
+The default value is automatically computed from the location of
+the Emacs Lisp package.")
+(setq slime-docker-path (file-name-directory load-file-name))
+
+(defvar slime-docker-machine-ssh-agent-helper-path nil
+  "The location of the docker-run-ssh-agent-helper script.
+This script is used to help share an SSH-Agent between the host
+computer and a docker container running on docker-machine.
+The default value is automatically computed.")
+
+(defun slime-docker-find-ssh-agent-helper ()
+  (cond
+   ((file-exists-p (concat slime-docker-path "scripts/docker-run-ssh-agent-helper"))
+    (concat slime-docker-path "scripts/docker-run-ssh-agent-helper"))
+   ((file-exists-p (concat slime-docker-path "docker-run-ssh-agent-helper"))
+    (concat slime-docker-path "docker-run-ssh-agent-helper"))
+   (t
+    nil)))
+
+(setq slime-docker-machine-ssh-agent-helper-path
+      (slime-docker-find-ssh-agent-helper))
+
 
 ;;;; Docker machine integration
 (defun slime-docker-machine-get-env-string (machine)
@@ -167,12 +191,13 @@ return the argument that should be passed to docker run to set variable to value
 
 (defun slime-docker-port (proc args)
   "Given a Docker PROC, return the port that 4005 is mapped to."
-  (let* ((process-environment (slime-docker-get-process-environment args))
-         (port-string (shell-command-to-string
-                       (format "docker port %S 4005" (slime-docker--cid proc)))))
-    (cl-assert (string-match ".*:\\([0-9]*\\)$" port-string)
-               "Unable to determine external port number.")
-    (string-to-number (match-string 1 port-string))))
+  (cl-destructuring-bind (&key docker-command &allow-other-keys) args
+    (let* ((process-environment (slime-docker-get-process-environment args))
+           (port-string (shell-command-to-string
+                         (format "%s port %S 4005" docker-command (slime-docker--cid proc)))))
+      (cl-assert (string-match ".*:\\([0-9]*\\)$" port-string)
+                 "Unable to determine external port number.")
+      (string-to-number (match-string 1 port-string)))))
 
 (defun slime-docker-make-docker-args (args)
   "Given the user specified arguments, return a list of arguments to be passed to Docker to start a container."
@@ -208,26 +233,27 @@ return the argument that should be passed to docker run to set variable to value
 
 (defun slime-docker-start-docker (buffer args)
   "Start a Docker container in the given buffer.  Return the process."
-  (with-current-buffer (get-buffer-create buffer)
-    (comint-mode)
-    (erase-buffer)
-    (let ((process-connection-type nil)
-          (cid-file (make-temp-file "slime-docker"))
-          (process-environment (slime-docker-get-process-environment args)))
-      (delete-file cid-file)
-      (comint-exec (current-buffer) "docker-lisp" "docker" nil
-                   (slime-docker-make-docker-args (cl-list* :cid-file cid-file args)))
-      (make-local-variable 'slime-docker-cid)
-      ;; Wait for cid-file to exist.
-      (while (not (file-exists-p cid-file))
-        (sit-for 0.1))
-      (sit-for 0.5)
-      (setq slime-docker-cid (slime-docker-read-cid cid-file)))
-    (lisp-mode-variables t)
-    (let ((proc (get-buffer-process (current-buffer))))
-      ;; TODO: deal with closing process when exiting?
-      ;; TODO: Run hooks
-      proc)))
+  (cl-destructuring-bind (&key docker-command &allow-other-keys) args
+    (with-current-buffer (get-buffer-create buffer)
+      (comint-mode)
+      (erase-buffer)
+      (let ((process-connection-type nil)
+            (cid-file (make-temp-file "slime-docker"))
+            (process-environment (slime-docker-get-process-environment args)))
+        (delete-file cid-file)
+        (comint-exec (current-buffer) "docker-lisp" docker-command nil
+                     (slime-docker-make-docker-args (cl-list* :cid-file cid-file args)))
+        (make-local-variable 'slime-docker-cid)
+        ;; Wait for cid-file to exist.
+        (while (not (file-exists-p cid-file))
+          (sit-for 0.1))
+        (sit-for 0.5)
+        (setq slime-docker-cid (slime-docker-read-cid cid-file)))
+      (lisp-mode-variables t)
+      (let ((proc (get-buffer-process (current-buffer))))
+        ;; TODO: deal with closing process when exiting?
+        ;; TODO: Run hooks
+        proc))))
 
 (defun slime-docker-maybe-start-docker (args)
   "Return a new or existing docker process."
@@ -407,7 +433,8 @@ MOUNTS is the mounts description Docker was started with."
                                    (slime-mount-path "/usr/local/share/common-lisp/source/slime/")
                                    (slime-mount-read-only t)
                                    uid
-                                   docker-machine)
+                                   docker-machine
+                                   (docker-command "docker"))
   "Start a Docker container and Lisp process in the container then connect to it.
 
 If the slime-tramp contrib is also loaded (highly recommended),
@@ -444,7 +471,12 @@ DOCKER-MACHINE if non-NIL, must be a string naming a machine name
   known to docker-machine. If provided, used to set appropriate
   environment variables for the docker process to communicate
   with the desired machine. Does not start the machine if it is
-  currently not running."
+  currently not running.
+DOCKER-COMMAND is the command to use when interacting with
+  docker. Defaults to \"docker\". See
+  `slime-docker-machine-ssh-agent-helper-path' if you are using
+  docker-machine and would like to share your SSH Agent with the
+  container."
   (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
                            mounts))
          (args (list :program program :program-args program-args
@@ -454,7 +486,8 @@ DOCKER-MACHINE if non-NIL, must be a string naming a machine name
                      :slime-mount-path slime-mount-path
                      :slime-read-only slime-mount-read-only
                      :uid uid
-                     :docker-machine docker-machine))
+                     :docker-machine docker-machine
+                     :docker-command docker-command))
          (proc (slime-docker-maybe-start-docker args)))
     (pop-to-buffer (process-buffer proc))
     (slime-docker-connect proc args)))
