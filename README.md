@@ -1,3 +1,4 @@
+[![MELPA](http://melpa.org/packages/slime-docker-badge.svg)](http://melpa.org/#/slime-docker)[![MELPA Stable](http://stable.melpa.org/packages/slime-docker-badge.svg)](http://stable.melpa.org/#/slime-docker)
 # slime-docker.el #
 
 This emacs package is designed to easily integrate SLIME with Lisps running in
