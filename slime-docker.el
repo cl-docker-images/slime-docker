@@ -3,7 +3,7 @@
 ;; URL: https://github.com/daewok/slime-docker
 ;; Package-Requires: ((emacs "24") (slime "2.16") (docker-tramp "0.1") (cl-lib "0.5"))
 ;; Keywords: docker, lisp, slime
-;; Version: 0.1
+;; Version: 0.2
 
 
 ;;; License:
@@ -437,17 +437,6 @@ SLIME-MOUNT-READ-ONLY if non-NIL, SLIME is mounted into the
   "Convenience to run `slime-docker-start' with OPTIONS."
   (apply #'slime-docker-start options))
 
-(defun slime-docker (&optional command)
-  "Launch a Lisp process in a Docker container and connect SLIME to it.
-
-COMMAND is the command to run in the Docker container."
-  (interactive)
-  (let ((inferior-lisp-program (or command inferior-lisp-program)))
-    (slime-docker-start* (cond ((and command (symbolp command))
-                                (slime-lisp-options command))
-                               (t (slime-docker-read-interactive-args))))))
-
-
 (defun slime-docker-read-interactive-args ()
   "Return the list of args which should be passed to `slime-docker-start'.
 
@@ -487,6 +476,17 @@ The rules for selecting the arguments are rather complicated:
                       slime-net-coding-system)))
                (list :program program :program-args program-args
                      :coding-system coding-system)))))))
+
+;;;###autoload
+(defun slime-docker (&optional command)
+  "Launch a Lisp process in a Docker container and connect SLIME to it.
+
+COMMAND is the command to run in the Docker container."
+  (interactive)
+  (let ((inferior-lisp-program (or command inferior-lisp-program)))
+    (slime-docker-start* (cond ((and command (symbolp command))
+                                (slime-lisp-options command))
+                               (t (slime-docker-read-interactive-args))))))
 
 (provide 'slime-docker)
 
