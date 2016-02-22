@@ -496,10 +496,10 @@ DOCKER-COMMAND is the command to use when interacting with
   "Convenience to run `slime-docker-start' with OPTIONS."
   (apply #'slime-docker-start options))
 
-(defun slime-docker-lisp-options ()
+(defun slime-docker-lisp-options (&optional name)
   (let ((slime-lisp-implementations slime-docker-implementations)
         (slime-default-lisp slime-docker-default-lisp))
-    (slime-lisp-options)))
+    (slime-lisp-options name)))
 
 (defun slime-docker-read-interactive-args ()
   "Return the list of args which should be passed to `slime-docker-start'.
