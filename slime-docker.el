@@ -378,7 +378,7 @@ ATTEMPT is a number saying which attempt this is.
 
 ARGS are the arguments `slime-docker-start' was called with."
   (slime-cancel-connect-retry-timer)
-  (cl-destructuring-bind (&key init docker-machine &allow-other-keys) args
+  (cl-destructuring-bind (&key init docker-machine mounts &allow-other-keys) args
     (let ((result (slime-docker-poll-stdout proc retries attempt))
           (try-again-p t))
       (cond
