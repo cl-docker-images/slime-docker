@@ -247,8 +247,11 @@ return the argument that should be passed to docker run to set variable to value
         ;; Wait for cid-file to exist.
         (while (not (file-exists-p cid-file))
           (sit-for 0.1))
-        (sit-for 0.5)
-        (setq slime-docker-cid (slime-docker-read-cid cid-file)))
+	(let ((cid (slime-docker-read-cid cid-file)))
+	  (while (string-equal "" cid)
+	    (sit-for 0.1)
+	    (setq cid (slime-docker-read-cid cid-file)))
+	  (setq slime-docker-cid cid)))
       (lisp-mode-variables t)
       (let ((proc (get-buffer-process (current-buffer))))
         ;; TODO: deal with closing process when exiting?
