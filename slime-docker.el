@@ -144,8 +144,9 @@ Returns a list of strings suitable for use with
 
 (defun slime-docker-machine-ip (machine)
   "Get the IP of MACHINE from docker-machine."
-  (shell-command-to-string
-   (concat "docker-machine ip " machine)))
+  (replace-regexp-in-string "\n\\'" ""
+                            (shell-command-to-string
+                             (concat "docker-machine ip " machine))))
 
 
 ;;;; Constructing Docker Containers
