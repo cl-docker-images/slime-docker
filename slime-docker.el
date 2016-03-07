@@ -498,9 +498,7 @@ DOCKER-MACHINE-SETENV if non-NIL, uses `setenv' to set Emacs
   environment with the necessary variables from
   docker-machine. Should be non-NIL if you expect tramp to work
   with images running in docker machine."
-  (let* ((mounts (cl-list* `(("/mnt/homedir/etimmons/.emacs.d/elpa/slime-20160219.1120/"
-                              ;,slime-path
-                              . ,slime-mount-path) :read-only ,slime-mount-read-only)
+  (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
                            mounts))
          (args (list :program program :program-args program-args
                      :directory directory :name name :buffer buffer
