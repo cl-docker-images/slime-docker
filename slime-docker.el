@@ -114,11 +114,10 @@ The default value is automatically computed.")
   (shell-command-to-string
    (format "docker-machine env --shell=sh %S" machine)))
 
-(defun slime-docker-machine-variables (machine)
+(defun slime-docker-machine-variables-alist (machine)
   "Get the environment variables for MACHINE from docker-machine.
 
-Returns a list of strings suitable for use with
-`process-environment'."
+Returns an alist."
   (let ((env-string (slime-docker-machine-get-env-string machine))
         (count 1)
         (out nil))
@@ -127,20 +126,32 @@ Returns a list of strings suitable for use with
         (save-match-data
           (unless (string-match "^export \\(.*\\)=\"\\(.*\\)\"$" subexpr)
             (error "format of environment variable from `docker-machine env' different than expected."))
-          (push (concat (match-string 1 subexpr) "=" (match-string 2 subexpr))
+          (push (cons (match-string 1 subexpr) (match-string 2 subexpr))
                 out))
         (setq env-string (replace-match "" nil nil env-string 1))))
     out))
 
+(defun slime-docker-machine-variables-string (machine)
+  "Get the environment variables for MACHINE from docker-machine.
+
+Returns a list of strings suitable for use with
+`process-environment'."
+  (mapcar (lambda (x) (concat (car x) "=" (cdr x)))
+          (slime-docker-machine-variables-alist)))
+
 (defun slime-docker-get-process-environment (args)
   "Get the `process-environment' to run Docker in."
-  (cl-destructuring-bind (&key docker-machine &allow-other-keys)
+  (cl-destructuring-bind (&key docker-machine docker-machine-setenv &allow-other-keys)
       args
-    (if docker-machine
-        (progn
-          (append (slime-docker-machine-variables docker-machine)
-                  process-environment))
-      process-environment)))
+    (cond
+     ((and docker-machine docker-machine-setenv)
+      (mapcar (lambda (x) (setenv (car x) (cdr x)))
+              (slime-docker-machine-variables-alist docker-machine))
+      process-environment)
+     (docker-machine
+      (append (slime-docker-machine-variables-string docker-machine)
+              process-environment))
+     process-environment)))
 
 (defun slime-docker-machine-ip (machine)
   "Get the IP of MACHINE from docker-machine."
@@ -438,7 +449,8 @@ MOUNTS is the mounts description Docker was started with."
                                    (slime-mount-read-only t)
                                    uid
                                    docker-machine
-                                   (docker-command "docker"))
+                                   (docker-command "docker")
+                                   (docker-machine-setenv t))
   "Start a Docker container and Lisp process in the container then connect to it.
 
 If the slime-tramp contrib is also loaded (highly recommended),
@@ -480,7 +492,11 @@ DOCKER-COMMAND is the command to use when interacting with
   docker. Defaults to \"docker\". See
   `slime-docker-machine-ssh-agent-helper-path' if you are using
   docker-machine and would like to share your SSH Agent with the
-  container."
+  container.
+DOCKER-MACHINE-SETENV if non-NIL, uses `setenv' to set Emacs
+  environment with the necessary variables from
+  docker-machine. Should be non-NIL if you expect tramp to work
+  with images running in docker machine."
   (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
                            mounts))
          (args (list :program program :program-args program-args
@@ -491,6 +507,7 @@ DOCKER-COMMAND is the command to use when interacting with
                      :slime-read-only slime-mount-read-only
                      :uid uid
                      :docker-machine docker-machine
+                     :docker-machine-setenv (and docker-machine docker-machine-setenv)
                      :docker-command docker-command))
          (proc (slime-docker-maybe-start-docker args)))
     (pop-to-buffer (process-buffer proc))
