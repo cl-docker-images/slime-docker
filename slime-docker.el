@@ -77,17 +77,17 @@ For KEYWORD-ARGS see `slime-docker-start'")
   "*The name of the default Lisp implementation for `slime-docker'.
 See `slime-docker-implementations'")
 
-(defvar slime-docker-cid nil
+(defvar slime-docker--cid nil
   "A buffer local variable in the inferior proccess.")
 
-(defvar slime-docker-inferior-lisp-program-history '()
+(defvar slime-docker--inferior-lisp-program-history '()
   "History list of command strings.  Used by `slime-docker'.")
 
-(defvar slime-docker-path nil
+(defvar slime-docker--path nil
   "Directory containing the slime-docker package.
 The default value is automatically computed from the location of
 the Emacs Lisp package.")
-(setq slime-docker-path (file-name-directory load-file-name))
+(setq slime-docker--path (file-name-directory load-file-name))
 
 (defvar slime-docker-machine-ssh-agent-helper-path nil
   "The location of the docker-run-ssh-agent-helper script.
@@ -97,10 +97,10 @@ The default value is automatically computed.")
 
 (defun slime-docker-find-ssh-agent-helper ()
   (cond
-   ((file-exists-p (concat slime-docker-path "scripts/docker-run-ssh-agent-helper"))
-    (concat slime-docker-path "scripts/docker-run-ssh-agent-helper"))
-   ((file-exists-p (concat slime-docker-path "docker-run-ssh-agent-helper"))
-    (concat slime-docker-path "docker-run-ssh-agent-helper"))
+   ((file-exists-p (concat slime-docker--path "scripts/docker-run-ssh-agent-helper"))
+    (concat slime-docker--path "scripts/docker-run-ssh-agent-helper"))
+   ((file-exists-p (concat slime-docker--path "docker-run-ssh-agent-helper"))
+    (concat slime-docker--path "docker-run-ssh-agent-helper"))
    (t
     nil)))
 
@@ -109,16 +109,16 @@ The default value is automatically computed.")
 
 
 ;;;; Docker machine integration
-(defun slime-docker-machine-get-env-string (machine)
+(defun slime-docker--machine-get-env-string (machine)
   "Get the env string for MACHINE from docker-machine."
   (shell-command-to-string
    (format "docker-machine env --shell=sh %S" machine)))
 
-(defun slime-docker-machine-variables-alist (machine)
+(defun slime-docker--machine-variables-alist (machine)
   "Get the environment variables for MACHINE from docker-machine.
 
 Returns an alist."
-  (let ((env-string (slime-docker-machine-get-env-string machine))
+  (let ((env-string (slime-docker--machine-get-env-string machine))
         (count 1)
         (out nil))
     (while (string-match "^\\(export .*=.*\\)$" env-string)
@@ -131,29 +131,30 @@ Returns an alist."
         (setq env-string (replace-match "" nil nil env-string 1))))
     out))
 
-(defun slime-docker-machine-variables-string (machine)
+(defun slime-docker--machine-variables-string (machine)
   "Get the environment variables for MACHINE from docker-machine.
 
 Returns a list of strings suitable for use with
 `process-environment'."
   (mapcar (lambda (x) (concat (car x) "=" (cdr x)))
-          (slime-docker-machine-variables-alist)))
+          (slime-docker--machine-variables-alist machine)))
 
-(defun slime-docker-get-process-environment (args)
+(defun slime-docker--get-process-environment (args)
   "Get the `process-environment' to run Docker in."
   (cl-destructuring-bind (&key docker-machine docker-machine-setenv &allow-other-keys)
       args
     (cond
      ((and docker-machine docker-machine-setenv)
-      (mapcar (lambda (x) (setenv (car x) (cdr x)))
-              (slime-docker-machine-variables-alist docker-machine))
+      (mapc (lambda (x) (setenv (car x) (cdr x)))
+            (slime-docker--machine-variables-alist docker-machine))
       process-environment)
      (docker-machine
-      (append (slime-docker-machine-variables-string docker-machine)
+      (append (slime-docker--machine-variables-string docker-machine)
               process-environment))
-     process-environment)))
+     (t
+      process-environment))))
 
-(defun slime-docker-machine-ip (machine)
+(defun slime-docker--machine-ip (machine)
   "Get the IP of MACHINE from docker-machine."
   (replace-regexp-in-string "\n\\'" ""
                             (shell-command-to-string
@@ -162,7 +163,7 @@ Returns a list of strings suitable for use with
 
 ;;;; Constructing Docker Containers
 
-(defun slime-docker-sanitize-pathname (pathname)
+(defun slime-docker--sanitize-pathname (pathname)
   "If on Windows, sanitize PATHNAME by returning what the path would be in the docker machine."
   (cond ((string-equal system-type "windows-nt")
          (unless (string-match "^.\\(:\\)/.*" pathname)
@@ -170,7 +171,7 @@ Returns a list of strings suitable for use with
          (concat "/" (replace-match "" nil t pathname 1)))
         (t pathname)))
 
-(defun slime-docker-mount-to-arg (mount)
+(defun slime-docker--mount-to-arg (mount)
   "Convert a MOUNT description to a Docker argument.
 
 Given a mount description of the form:
@@ -180,12 +181,12 @@ Given a mount description of the form:
 return the argument that should be passed to docker run to mount this volume."
   (cl-destructuring-bind ((host-vol . container-vol) &key read-only)
       mount
-    (let ((base-string (format "--volume=%s:%s" (slime-docker-sanitize-pathname host-vol) container-vol)))
+    (let ((base-string (format "--volume=%s:%s" (slime-docker--sanitize-pathname host-vol) container-vol)))
       (when read-only
         (setq base-string (concat base-string ":ro")))
       base-string)))
 
-(defun slime-docker-env-to-arg (e)
+(defun slime-docker--env-to-arg (e)
   "Convert E, a pair, to a Docker argument.
 
 Given an environment description of the form
@@ -196,22 +197,22 @@ return the argument that should be passed to docker run to set variable to value
   (cl-destructuring-bind (var . val) e
     (concat "--env=" var "=" val)))
 
-(defun slime-docker--cid (proc)
+(defun slime-docker---cid (proc)
   "Given a Docker PROC, return the container ID."
   (with-current-buffer (process-buffer proc)
-    slime-docker-cid))
+    slime-docker--cid))
 
-(defun slime-docker-port (proc args)
+(defun slime-docker--port (proc args)
   "Given a Docker PROC, return the port that 4005 is mapped to."
   (cl-destructuring-bind (&key docker-command &allow-other-keys) args
-    (let* ((process-environment (slime-docker-get-process-environment args))
+    (let* ((process-environment (slime-docker--get-process-environment args))
            (port-string (shell-command-to-string
-                         (format "%s port %S 4005" docker-command (slime-docker--cid proc)))))
+                         (format "%s port %S 4005" docker-command (slime-docker---cid proc)))))
       (cl-assert (string-match ".*:\\([0-9]*\\)$" port-string)
                  "Unable to determine external port number.")
       (string-to-number (match-string 1 port-string)))))
 
-(defun slime-docker-make-docker-args (args)
+(defun slime-docker--make-docker-args (args)
   "Given the user specified arguments, return a list of arguments to be passed to Docker to start a container."
   (cl-destructuring-bind (&key program program-args
                                cid-file
@@ -225,8 +226,8 @@ return the argument that should be passed to docker run to set variable to value
       ,(concat "--cidfile=" cid-file)
       "-p" ,(concat (if docker-machine "" "127.0.0.1::") "4005")
       ,(format "--rm=%s" (if rm "true" "false"))
-      ,@(mapcar #'slime-docker-mount-to-arg mounts)
-      ,@(mapcar #'slime-docker-env-to-arg env)
+      ,@(mapcar #'slime-docker--mount-to-arg mounts)
+      ,@(mapcar #'slime-docker--env-to-arg env)
       ,@(when uid
           (list (format "--user=%s" uid)))
       ,@(when directory
@@ -235,7 +236,7 @@ return the argument that should be passed to docker run to set variable to value
       ,program
       ,@program-args)))
 
-(defun slime-docker-read-cid (cid-file)
+(defun slime-docker--read-cid (cid-file)
   "Given a CID-FILE where a continer ID has been written, read the container ID from it."
   (save-excursion
     (with-temp-buffer
@@ -243,7 +244,7 @@ return the argument that should be passed to docker run to set variable to value
       (buffer-string))))
 
 
-(defun slime-docker-start-docker (buffer args)
+(defun slime-docker--start-docker (buffer args)
   "Start a Docker container in the given buffer.  Return the process."
   (cl-destructuring-bind (&key docker-command &allow-other-keys) args
     (with-current-buffer (get-buffer-create buffer)
@@ -251,44 +252,44 @@ return the argument that should be passed to docker run to set variable to value
       (erase-buffer)
       (let ((process-connection-type nil)
             (cid-file (make-temp-file "slime-docker"))
-            (process-environment (slime-docker-get-process-environment args)))
+            (process-environment (slime-docker--get-process-environment args)))
         (delete-file cid-file)
         (comint-exec (current-buffer) "docker-lisp" docker-command nil
-                     (slime-docker-make-docker-args (cl-list* :cid-file cid-file args)))
-        (make-local-variable 'slime-docker-cid)
+                     (slime-docker--make-docker-args (cl-list* :cid-file cid-file args)))
+        (make-local-variable 'slime-docker--cid)
         ;; Wait for cid-file to exist.
         (while (not (file-exists-p cid-file))
           (sit-for 0.1))
-	(let ((cid (slime-docker-read-cid cid-file)))
+	(let ((cid (slime-docker--read-cid cid-file)))
 	  (while (string-equal "" cid)
 	    (sit-for 0.1)
-	    (setq cid (slime-docker-read-cid cid-file)))
-	  (setq slime-docker-cid cid)))
+	    (setq cid (slime-docker--read-cid cid-file)))
+	  (setq slime-docker--cid cid)))
       (lisp-mode-variables t)
       (let ((proc (get-buffer-process (current-buffer))))
         ;; TODO: deal with closing process when exiting?
         ;; TODO: Run hooks
         proc))))
 
-(defun slime-docker-maybe-start-docker (args)
+(defun slime-docker--maybe-start-docker (args)
   "Return a new or existing docker process."
   (cl-destructuring-bind (&key buffer &allow-other-keys) args
     (cond
      ((not (comint-check-proc buffer))
-      (slime-docker-start-docker buffer args))
+      (slime-docker--start-docker buffer args))
      ;; TODO: Prompt user to see if the existing process should be reinitialized.
      (t
-      (slime-docker-start-docker (generate-new-buffer-name buffer)
+      (slime-docker--start-docker (generate-new-buffer-name buffer)
                                  args)))))
 
 
 ;;;; Tramp Integration
 
-(defun slime-docker-hostname (proc)
+(defun slime-docker--hostname (proc)
   "Given a Docker PROC, return its hostname."
-  (substring (slime-docker--cid proc) 0 12))
+  (substring (slime-docker---cid proc) 0 12))
 
-(defun slime-docker-translate-filename->emacs (lisp-filename mounts hostname)
+(defun slime-docker--translate-filename->emacs (lisp-filename mounts hostname)
   "Translate LISP-FILENAME to a filename that Emacs can open.
 
 MOUNTS is the mounts description that Docker was started with.
@@ -303,7 +304,7 @@ HOSTNAME is the hostname of the Docker container."
       ;; else, fall back to TRAMP
       (tramp-make-tramp-file-name "docker" nil hostname lisp-filename))))
 
-(defun slime-docker-translate-filename->lisp (emacs-filename mounts)
+(defun slime-docker--translate-filename->lisp (emacs-filename mounts)
   "Translate the EMACS-FILENAME into a filename that Lisp can open.
 
 MOUNTS is the mounts description that Docker was started with."
@@ -322,7 +323,7 @@ MOUNTS is the mounts description that Docker was started with."
 
 
 
-(defun slime-docker-init-command ()
+(defun slime-docker--init-command ()
   "Return a string to initialize Lisp."
   (let ((loader (if (file-name-absolute-p slime-backend)
                     slime-backend
@@ -336,7 +337,7 @@ MOUNTS is the mounts description that Docker was started with."
                (setf (symbol-value (read-from-string "swank::*loopback-interface*")) "0.0.0.0")
                (funcall (read-from-string "swank:create-server"))))))
 
-(defun slime-docker-start-swank-server (proc args)
+(defun slime-docker--start-swank-server (proc args)
   "Start a swank server in Docker PROC.
 
 ARGS are the arguments `slime-docker-start' was called with."
@@ -347,7 +348,7 @@ ARGS are the arguments `slime-docker-start' was called with."
         (insert-before-markers str)
         (process-send-string proc str)))))
 
-(defun slime-docker-poll-stdout (proc _retries attempt)
+(defun slime-docker--poll-stdout (proc _retries attempt)
   "Return T when swank is ready for connections.
 
 Get the PROC buffer contents, and try to find the string:
@@ -363,7 +364,7 @@ ATTEMPT is an integer describing which attempt we are on."
         (message "match: %S" match)
         t))))
 
-(defun slime-docker-connected-hook-function ()
+(defun slime-docker--connected-hook-function ()
   "A function that is run once SLIME is connected.
 
 Unsets the inferior process for the connection once all other
@@ -372,12 +373,12 @@ its inferior buffer, which doesn't give docker time to remove the
 container."
   (let* ((c (slime-connection))
          (proc (slime-inferior-process c)))
-    (when (slime-docker--cid proc)
+    (when (slime-docker---cid proc)
       (slime-set-inferior-process c nil))))
 
-(add-hook 'slime-connected-hook 'slime-docker-connected-hook-function t)
+(add-hook 'slime-connected-hook 'slime-docker--connected-hook-function t)
 
-(defun slime-docker-connect-when-ready (proc retries attempt args)
+(defun slime-docker--connect-when-ready (proc retries attempt args)
   "Connect to SWANK when it is ready for connections.
 
 Checks Lisp's stdout in PROC to see if SWANK is ready.  If it is,
@@ -391,7 +392,7 @@ ATTEMPT is a number saying which attempt this is.
 ARGS are the arguments `slime-docker-start' was called with."
   (slime-cancel-connect-retry-timer)
   (cl-destructuring-bind (&key init docker-machine mounts &allow-other-keys) args
-    (let ((result (slime-docker-poll-stdout proc retries attempt))
+    (let ((result (slime-docker--poll-stdout proc retries attempt))
           (try-again-p t))
       (cond
        ((numberp result)
@@ -399,15 +400,15 @@ ARGS are the arguments `slime-docker-start' was called with."
        (result
         (setq try-again-p nil)
         (sit-for 0.2)
-        (let* ((ip (if docker-machine (slime-docker-machine-ip docker-machine) "127.0.0.1"))
-               (c (slime-connect ip (slime-docker-port proc args)))
-               (hostname (slime-docker-hostname proc)))
+        (let* ((ip (if docker-machine (slime-docker--machine-ip docker-machine) "127.0.0.1"))
+               (c (slime-connect ip (slime-docker--port proc args)))
+               (hostname (slime-docker--hostname proc)))
           (slime-set-inferior-process c proc)
           (push (list (concat "^" hostname "$")
                       (lambda (emacs-filename)
-                        (slime-docker-translate-filename->lisp emacs-filename mounts))
+                        (slime-docker--translate-filename->lisp emacs-filename mounts))
                       (lambda (lisp-filename)
-                        (slime-docker-translate-filename->emacs lisp-filename mounts hostname)))
+                        (slime-docker--translate-filename->emacs lisp-filename mounts hostname)))
                 slime-filename-translations)))
        ((and retries (zerop retries))
         (setq try-again-p nil)
@@ -418,18 +419,18 @@ ARGS are the arguments `slime-docker-start' was called with."
       (when try-again-p
         (setq slime-connect-retry-timer
               (run-with-timer 0.3 nil
-                              #'slime-timer-call #'slime-docker-connect-when-ready
+                              #'slime-timer-call #'slime-docker--connect-when-ready
                               proc (and retries (1- retries)) (1+ attempt)
                               args))))))
 
-(defun slime-docker-connect (proc args)
+(defun slime-docker--connect (proc args)
   "Start SWANK in PROC and connect to it.
 
 INIT is a function that returns the string to start SWANK.
 
 MOUNTS is the mounts description Docker was started with."
-  (slime-docker-start-swank-server proc args)
-  (slime-docker-connect-when-ready proc nil 0 args))
+  (slime-docker--start-swank-server proc args)
+  (slime-docker--connect-when-ready proc nil 0 args))
 
 
 ;;;; User interaction
@@ -442,7 +443,7 @@ MOUNTS is the mounts description Docker was started with."
                                    (image-tag "latest")
                                    (rm t)
                                    env
-                                   (init 'slime-docker-init-command)
+                                   (init 'slime-docker--init-command)
                                    mounts
                                    coding-system
                                    (slime-mount-path "/usr/local/share/common-lisp/source/slime/")
@@ -497,7 +498,9 @@ DOCKER-MACHINE-SETENV if non-NIL, uses `setenv' to set Emacs
   environment with the necessary variables from
   docker-machine. Should be non-NIL if you expect tramp to work
   with images running in docker machine."
-  (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
+  (let* ((mounts (cl-list* `(("/mnt/homedir/etimmons/.emacs.d/elpa/slime-20160219.1120/"
+                              ;,slime-path
+                              . ,slime-mount-path) :read-only ,slime-mount-read-only)
                            mounts))
          (args (list :program program :program-args program-args
                      :directory directory :name name :buffer buffer
@@ -509,20 +512,20 @@ DOCKER-MACHINE-SETENV if non-NIL, uses `setenv' to set Emacs
                      :docker-machine docker-machine
                      :docker-machine-setenv (and docker-machine docker-machine-setenv)
                      :docker-command docker-command))
-         (proc (slime-docker-maybe-start-docker args)))
+         (proc (slime-docker--maybe-start-docker args)))
     (pop-to-buffer (process-buffer proc))
-    (slime-docker-connect proc args)))
+    (slime-docker--connect proc args)))
 
 (defun slime-docker-start* (options)
   "Convenience to run `slime-docker-start' with OPTIONS."
   (apply #'slime-docker-start options))
 
-(defun slime-docker-lisp-options (&optional name)
+(defun slime-docker--lisp-options (&optional name)
   (let ((slime-lisp-implementations slime-docker-implementations)
         (slime-default-lisp slime-docker-default-lisp))
     (slime-lisp-options name)))
 
-(defun slime-docker-read-interactive-args ()
+(defun slime-docker--read-interactive-args ()
   "Return the list of args which should be passed to `slime-docker-start'.
 
 The rules for selecting the arguments are rather complicated:
@@ -541,7 +544,7 @@ The rules for selecting the arguments are rather complicated:
 - If the `prefix-arg' is positive, read the command to start the
   process."
   (let ((table slime-docker-implementations))
-    (cond ((not current-prefix-arg) (slime-docker-lisp-options))
+    (cond ((not current-prefix-arg) (slime-docker--lisp-options))
           ((eq current-prefix-arg '-)
            (let ((key (completing-read
                        "Lisp name: " (mapcar (lambda (x)
@@ -553,7 +556,7 @@ The rules for selecting the arguments are rather complicated:
            (cl-destructuring-bind (program &rest program-args)
                (split-string-and-unquote
                 (read-shell-command "Run lisp: " inferior-lisp-program
-                                    'slime-docker-inferior-lisp-program-history))
+                                    'slime-docker--inferior-lisp-program-history))
              (let ((coding-system
                     (if (eq 16 (prefix-numeric-value current-prefix-arg))
                         (read-coding-system "set slime-coding-system: "
@@ -570,8 +573,8 @@ COMMAND is the command to run in the Docker container."
   (interactive)
   (let ((inferior-lisp-program (or command inferior-lisp-program)))
     (slime-docker-start* (cond ((and command (symbolp command))
-                                (slime-docker-lisp-options command))
-                               (t (slime-docker-read-interactive-args))))))
+                                (slime-docker--lisp-options command))
+                               (t (slime-docker--read-interactive-args))))))
 
 (provide 'slime-docker)
 
