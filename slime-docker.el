@@ -97,8 +97,8 @@ The default value is automatically computed.")
 
 (defun slime-docker-find-ssh-agent-helper ()
   (cond
-   ((file-exists-p (concat slime-docker--path "scripts/docker-run-ssh-agent-helper"))
-    (concat slime-docker--path "scripts/docker-run-ssh-agent-helper"))
+   ((file-exists-p (concat slime-docker--path "bin/docker-run-ssh-agent-helper"))
+    (concat slime-docker--path "bin/docker-run-ssh-agent-helper"))
    ((file-exists-p (concat slime-docker--path "docker-run-ssh-agent-helper"))
     (concat slime-docker--path "docker-run-ssh-agent-helper"))
    (t
@@ -115,8 +115,8 @@ ASLR.")
 (defun slime-docker--find-sbcl-seccomp-profile ()
   "Attempt to find the seccomp profile for SBCL."
   (cond
-   ((file-exists-p (concat slime-docker--path "docker-sbcl-seccomp.json"))
-    (concat slime-docker--path "docker-sbcl-seccomp.json"))
+   ((file-exists-p (concat slime-docker--path "resources/docker-sbcl-seccomp.json"))
+    (concat slime-docker--path "resources/docker-sbcl-seccomp.json"))
    (t
     nil)))
 
