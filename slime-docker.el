@@ -3,7 +3,7 @@
 ;; URL: https://github.com/daewok/slime-docker
 ;; Package-Requires: ((emacs "24") (slime "2.16") (docker-tramp "0.1") (cl-lib "0.5"))
 ;; Keywords: docker, lisp, slime
-;; Version: 0.4
+;; Version: 0.5
 
 
 ;;; License:
@@ -67,7 +67,7 @@ The list should have the form:
 
 NAME is a symbol for the implementation.
 
-PROGRAM and PROGRAM-ARGS are strings used to start 
+PROGRAM and PROGRAM-ARGS are strings used to start
 the Lisp
 process inside the Docker container.
 
@@ -435,6 +435,7 @@ MOUNTS is the mounts description Docker was started with."
 
 ;;;; User interaction
 
+;;;###autoload
 (cl-defun slime-docker-start (&key (program inferior-lisp-program) program-args
                                    directory
                                    name
