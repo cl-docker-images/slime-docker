@@ -28,3 +28,25 @@ SLIME has to connect. Neither of these are necessarily true with Docker.
 This package watches the stdout of the Lisp process to figure out when Swank is
 ready to accept connections. It also queries the Docker daemon to determine
 which port 4005 has been forwarded to.
+
+## Some gotchas ##
+
+### SBCL ASLR ###
+
+SBCL does its best to turn off ASLR while it is starting. However, the default
+Docker seccomp profile disallows this, resulting in the following message being
+printed every time SBCL starts:
+
+> WARNING:
+> Couldn't re-execute SBCL with proper personality flags (/proc isn't mounted? setuid?)
+> Trying to continue anyway.
+
+If you have seccomp support compiled in Docker and would like to get rid of this
+message, you have at least these two options:
+
++ Disable seccomp for the SBCL container, by adding `("seccomp" . "unconfined")`
+  to the `:security-opts` list.
+
++ Use the modified seccomp profile provided by this package to enable full use
+  of the `personality` syscall. To do this, add `("seccomp" . slime-docker-sbcl-seccomp-profile)`
+  to the `:security-opts` list.

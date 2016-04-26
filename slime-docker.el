@@ -107,6 +107,22 @@ The default value is automatically computed.")
 (setq slime-docker-machine-ssh-agent-helper-path
       (slime-docker-find-ssh-agent-helper))
 
+(defvar slime-docker-sbcl-seccomp-profile nil
+  "The location of the seccomp profile for SBCL (the default
+docker seccomp plus allowing the use of personality to disable
+ASLR.")
+
+(defun slime-docker--find-sbcl-seccomp-profile ()
+  "Attempt to find the seccomp profile for SBCL."
+  (cond
+   ((file-exists-p (concat slime-docker--path "docker-sbcl-seccomp.json"))
+    (concat slime-docker--path "docker-sbcl-seccomp.json"))
+   (t
+    nil)))
+
+(setq slime-docker-sbcl-seccomp-profile
+      (slime-docker--find-sbcl-seccomp-profile))
+
 
 ;;;; Docker machine integration
 (defun slime-docker--machine-get-env-string (machine)
@@ -197,6 +213,17 @@ return the argument that should be passed to docker run to set variable to value
   (cl-destructuring-bind (var . val) e
     (concat "--env=" var "=" val)))
 
+(defun slime-docker--security-opt-to-arg (e)
+  "Convert E, a pair, to a Docker argument.
+
+Given an environment description of the form
+
+\(SECURITY-OPTION . VALUE)
+
+return the argument that should be passed to docker run to set the security option."
+  (cl-destructuring-bind (var . val) e
+    (concat "--security-opt=" var "=" val)))
+
 (defun slime-docker---cid (proc)
   "Given a Docker PROC, return the container ID."
   (with-current-buffer (process-buffer proc)
@@ -220,6 +247,7 @@ return the argument that should be passed to docker run to set variable to value
                                rm mounts env directory
                                uid
                                docker-machine
+                               security-opts
                                &allow-other-keys) args
     `("run"
       "-i"
@@ -228,6 +256,7 @@ return the argument that should be passed to docker run to set variable to value
       ,(format "--rm=%s" (if rm "true" "false"))
       ,@(mapcar #'slime-docker--mount-to-arg mounts)
       ,@(mapcar #'slime-docker--env-to-arg env)
+      ,@(mapcar #'slime-docker--security-opt-to-arg security-opts)
       ,@(when uid
           (list (format "--user=%s" uid)))
       ,@(when directory
@@ -452,7 +481,8 @@ MOUNTS is the mounts description Docker was started with."
                                    uid
                                    docker-machine
                                    (docker-command "docker")
-                                   (docker-machine-setenv t))
+                                   (docker-machine-setenv t)
+                                   security-opts)
   "Start a Docker container and Lisp process in the container then connect to it.
 
 If the slime-tramp contrib is also loaded (highly recommended),
@@ -498,7 +528,10 @@ DOCKER-COMMAND is the command to use when interacting with
 DOCKER-MACHINE-SETENV if non-NIL, uses `setenv' to set Emacs
   environment with the necessary variables from
   docker-machine. Should be non-NIL if you expect tramp to work
-  with images running in docker machine."
+  with images running in docker machine.
+SECURITY-OPTS specifies --security-opt options when running
+  'docker run'. Must be an alist where keys and values are
+  strings. See README for note on using this with SBCL."
   (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
                            mounts))
          (args (list :program program :program-args program-args
@@ -510,7 +543,8 @@ DOCKER-MACHINE-SETENV if non-NIL, uses `setenv' to set Emacs
                      :uid uid
                      :docker-machine docker-machine
                      :docker-machine-setenv (and docker-machine docker-machine-setenv)
-                     :docker-command docker-command))
+                     :docker-command docker-command
+                     :security-opts security-opts))
          (proc (slime-docker--maybe-start-docker args)))
     (pop-to-buffer (process-buffer proc))
     (slime-docker--connect proc args)))
