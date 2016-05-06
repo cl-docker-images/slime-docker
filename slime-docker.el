@@ -3,7 +3,7 @@
 ;; URL: https://github.com/daewok/slime-docker
 ;; Package-Requires: ((emacs "24") (slime "2.16") (docker-tramp "0.1") (cl-lib "0.5"))
 ;; Keywords: docker, lisp, slime
-;; Version: 0.5
+;; Version: 0.6
 
 
 ;;; License:
@@ -360,7 +360,7 @@ MOUNTS is the mounts description that Docker was started with."
                   (concat "/usr/local/share/common-lisp/source/slime/" slime-backend))))
     (format "%S\n\n"
             `(progn
-               (load ,(expand-file-name loader)
+               (load ,loader
                      :verbose t)
                (funcall (read-from-string "swank-loader:init"))
                (setf (symbol-value (read-from-string "swank::*loopback-interface*")) "0.0.0.0")
