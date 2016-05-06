@@ -57,7 +57,6 @@ without docker-machine.
 ;; Set the default lisp you want to use (here it's SBCL).
 (setq inferior-lisp-program "sbcl")
 ```
-
 3. Run `M-x slime-docker`
 
 
@@ -85,8 +84,6 @@ docker-machine.
 ;; docker-machine. Change "default" to the name of the machine you're using.
 (setq slime-docker-implementations `((sbcl ("sbcl") :docker-machine "default")))
 ```
-
-
 5. Run `M-x slime-docker`
 
 ## Documentation ##
