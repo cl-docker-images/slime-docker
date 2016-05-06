@@ -61,7 +61,7 @@
 ;;;; Variable Definitions
 
 (defvar slime-docker-implementations nil
-  "*A list of known Lisp implementations running on Docker.
+  "A list of known Lisp implementations running on Docker.
 The list should have the form:
   ((NAME (PROGRAM PROGRAM-ARGS ...) &key KEYWORD-ARGS) ...)
 
@@ -74,7 +74,7 @@ process inside the Docker container.
 For KEYWORD-ARGS see `slime-docker-start'")
 
 (defvar slime-docker-default-lisp nil
-  "*The name of the default Lisp implementation for `slime-docker'.
+  "The name of the default Lisp implementation for `slime-docker'.
 See `slime-docker-implementations'")
 
 (defvar slime-docker--cid nil
@@ -601,6 +601,11 @@ The rules for selecting the arguments are rather complicated:
 ;;;###autoload
 (defun slime-docker (&optional command)
   "Launch a Lisp process in a Docker container and connect SLIME to it.
+
+The normal entry point to slime-docker.el. Similar to `slime'
+function. Tries to guess the correct Lisp to start based on
+prefix arguments and the values of `slime-docker-implementations'
+and `slime-docker-default-lisp'.
 
 COMMAND is the command to run in the Docker container."
   (interactive)
