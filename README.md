@@ -45,19 +45,19 @@ variables, mounting folders, and so on).
 These instructions will get you up and running using SBCL on a Linux machine
 without docker-machine.
 
-1. Install slime-docker. I recommend using
-   [MELPA](http://melpa.org/#/getting-started) if you haven't already installed
-   slime-docker manually.
+  1. Install slime-docker. I recommend using
+     [MELPA](http://melpa.org/#/getting-started) if you haven't already installed
+     slime-docker manually.
 
-2. Add the following to your Emacs config:
+  2. Add the following to your Emacs config:
 
-```elisp
-;; Do some standard SLIME configuration.
-(slime-setup '(slime-fancy slime-tramp))
-;; Set the default lisp you want to use (here it's SBCL).
-(setq inferior-lisp-program "sbcl")
-```
-3. Run `M-x slime-docker`
+     ```elisp
+     ;; Do some standard SLIME configuration.
+     (slime-setup '(slime-fancy slime-tramp))
+     ;; Set the default lisp you want to use (here it's SBCL).
+     (setq inferior-lisp-program "sbcl")
+     ```
+  3. Run `M-x slime-docker`
 
 
 You have to do a little more work to use this with docker-machine, as it
@@ -65,26 +65,26 @@ requires some environment variables to be set before the `docker` command will
 work. These instructions will get you up and running on any OS with
 docker-machine.
 
-1. Install slime-docker. I recommend using
-   [MELPA](http://melpa.org/#/getting-started) if you haven't already installed
-   slime-docker manually.
+  1. Install slime-docker. I recommend using
+     [MELPA](http://melpa.org/#/getting-started) if you haven't already installed
+     slime-docker manually.
 
-2. Make sure `docker-machine` is on your PATH. OSX users may find it useful to
-   use [exec-path-from-shell](https://github.com/purcell/exec-path-from-shell)
-   for this.
+  2. Make sure `docker-machine` is on your PATH. OSX users may find it useful to
+     use [exec-path-from-shell](https://github.com/purcell/exec-path-from-shell)
+     for this.
 
-3. Make sure the virtual machine that you want to use is running.
+  3. Make sure the virtual machine that you want to use is running.
 
-4. Add the following to your Emacs config:
+  4. Add the following to your Emacs config:
 
-```elisp
-;; Do some standard SLIME configuration.
-(slime-setup '(slime-fancy slime-tramp))
-;; We'll use sbcl here, but we need to tell slime-docker that we're using
-;; docker-machine. Change "default" to the name of the machine you're using.
-(setq slime-docker-implementations `((sbcl ("sbcl") :docker-machine "default")))
-```
-5. Run `M-x slime-docker`
+     ```elisp
+     ;; Do some standard SLIME configuration.
+     (slime-setup '(slime-fancy slime-tramp))
+     ;; We'll use sbcl here, but we need to tell slime-docker that we're using
+     ;; docker-machine. Change "default" to the name of the machine you're using.
+     (setq slime-docker-implementations `((sbcl ("sbcl") :docker-machine "default")))
+     ```
+  5. Run `M-x slime-docker`
 
 ## Documentation ##
 
