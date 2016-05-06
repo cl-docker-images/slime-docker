@@ -190,9 +190,9 @@ SBCL does its best to turn off ASLR while it is starting. However, the default
 Docker seccomp profile disallows this, resulting in the following message being
 printed every time SBCL starts:
 
-> WARNING:
-> Couldn't re-execute SBCL with proper personality flags (/proc isn't mounted? setuid?)
-> Trying to continue anyway.
+  > WARNING:
+  > Couldn't re-execute SBCL with proper personality flags (/proc isn't mounted? setuid?)
+  > Trying to continue anyway.
 
 If you have seccomp support compiled in Docker and would like to get rid of this
 message, you have at least these two options:
