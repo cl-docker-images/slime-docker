@@ -89,6 +89,18 @@ The default value is automatically computed from the location of
 the Emacs Lisp package.")
 (setq slime-docker--path (file-name-directory load-file-name))
 
+(defgroup slime-docker nil
+  "The slime-docker group."
+  :group 'slime)
+
+(defcustom slime-docker-ensure-mount-folders-exist t
+  "If non-NIL, ensure that folders that are mounted into a Docker
+  container exist before starting the container. This ensures
+  those folders are created owned by the current user instead of
+  root (which is the case if docker has to make the folder)."
+  :type 'boolean
+  :group 'slime-docker)
+
 (defvar slime-docker-machine-ssh-agent-helper-path nil
   "The location of the docker-run-ssh-agent-helper script.
 This script is used to help share an SSH-Agent between the host
@@ -275,6 +287,17 @@ return the argument that should be passed to docker run to set the security opti
       (insert-file-contents cid-file)
       (buffer-string))))
 
+(defun slime-docker--ensure-mount-folder-exists (mount-description)
+  "Ensures the host folder in requested MOUNT-DESCRIPTION exists."
+  (cl-destructuring-bind ((host-vol . container-vol) &rest opts)
+      mount-description
+    (make-directory host-vol t)))
+
+(defun slime-docker--ensure-mount-folders-exist (args)
+  "Ensures that all host folders in requested mounts of ARGS exist."
+  (cl-destructuring-bind (&key mounts
+                               &allow-other-keys) args
+    (mapc #'slime-docker--ensure-mount-folder-exists mounts)))
 
 (defun slime-docker--start-docker (buffer args)
   "Start a Docker container in the given buffer.  Return the process."
@@ -286,6 +309,8 @@ return the argument that should be passed to docker run to set the security opti
             (cid-file (make-temp-file "slime-docker"))
             (process-environment (slime-docker--get-process-environment args)))
         (delete-file cid-file)
+        (when slime-docker-ensure-mount-folders-exist
+          (slime-docker--ensure-mount-folders-exist args))
         (comint-exec (current-buffer) "docker-lisp" docker-command nil
                      (slime-docker--make-docker-args (cl-list* :cid-file cid-file args)))
         (make-local-variable 'slime-docker--cid)
