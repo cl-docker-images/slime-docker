@@ -3,7 +3,7 @@
 ;; URL: https://github.com/daewok/slime-docker
 ;; Package-Requires: ((emacs "24") (slime "2.16") (docker-tramp "0.1") (cl-lib "0.5"))
 ;; Keywords: docker, lisp, slime
-;; Version: 0.6
+;; Version: 0.7
 
 
 ;;; License:
@@ -248,6 +248,7 @@ return the argument that should be passed to docker run to set the security opti
                                uid
                                docker-machine
                                security-opts
+                               userns
                                &allow-other-keys) args
     `("run"
       "-i"
@@ -261,6 +262,8 @@ return the argument that should be passed to docker run to set the security opti
           (list (format "--user=%s" uid)))
       ,@(when directory
           (list (format "--workdir=%s" directory)))
+      ,@(when userns
+          (list (format "--userns=%s" userns)))
       ,(format "%s:%s" image-name image-tag)
       ,program
       ,@program-args)))
@@ -482,7 +485,8 @@ MOUNTS is the mounts description Docker was started with."
                                    docker-machine
                                    (docker-command "docker")
                                    (docker-machine-setenv t)
-                                   security-opts)
+                                   security-opts
+                                   userns)
   "Start a Docker container and Lisp process in the container then connect to it.
 
 If the slime-tramp contrib is also loaded (highly recommended),
@@ -531,7 +535,10 @@ DOCKER-MACHINE-SETENV if non-NIL, uses `setenv' to set Emacs
   with images running in docker machine.
 SECURITY-OPTS specifies --security-opt options when running
   'docker run'. Must be an alist where keys and values are
-  strings. See README for note on using this with SBCL."
+  strings. See README for note on using this with SBCL.
+USERNS specifies the user namespace to use when starting the
+  container. See the --userns option to 'docker run' for more
+  information"
   (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
                            mounts))
          (args (list :program program :program-args program-args
@@ -544,7 +551,8 @@ SECURITY-OPTS specifies --security-opt options when running
                      :docker-machine docker-machine
                      :docker-machine-setenv (and docker-machine docker-machine-setenv)
                      :docker-command docker-command
-                     :security-opts security-opts))
+                     :security-opts security-opts
+                     :userns userns))
          (proc (slime-docker--maybe-start-docker args)))
     (pop-to-buffer (process-buffer proc))
     (slime-docker--connect proc args)))
