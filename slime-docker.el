@@ -380,19 +380,20 @@ MOUNTS is the mounts description that Docker was started with."
 
 
 
-(defun slime-docker--init-command ()
+(defun slime-docker--init-command (args)
   "Return a string to initialize Lisp."
-  (let ((loader (if (file-name-absolute-p slime-backend)
-                    slime-backend
-                  ;;(concat slime-path slime-backend)
-                  (concat "/usr/local/share/common-lisp/source/slime/" slime-backend))))
-    (format "%S\n\n"
-            `(progn
-               (load ,loader
-                     :verbose t)
-               (funcall (read-from-string "swank-loader:init"))
-               (setf (symbol-value (read-from-string "swank::*loopback-interface*")) "0.0.0.0")
-               (funcall (read-from-string "swank:create-server"))))))
+  (cl-destructuring-bind (&key slime-mount-path &allow-other-keys)
+      args
+    (let ((loader (if (file-name-absolute-p slime-backend)
+                      slime-backend
+                    (concat slime-mount-path "/" slime-backend))))
+      (format "%S\n\n"
+              `(progn
+                 (load ,loader
+                       :verbose t)
+                 (funcall (read-from-string "swank-loader:init"))
+                 (setf (symbol-value (read-from-string "swank::*loopback-interface*")) "0.0.0.0")
+                 (funcall (read-from-string "swank:create-server")))))))
 
 (defun slime-docker--start-swank-server (proc args)
   "Start a swank server in Docker PROC.
@@ -400,7 +401,7 @@ MOUNTS is the mounts description that Docker was started with."
 ARGS are the arguments `slime-docker-start' was called with."
   (cl-destructuring-bind (&key init &allow-other-keys) args
     (with-current-buffer (process-buffer proc)
-      (let ((str (funcall init)))
+      (let ((str (funcall init args)))
         (goto-char (process-mark proc))
         (insert-before-markers str)
         (process-send-string proc str)))))
@@ -448,7 +449,7 @@ ATTEMPT is a number saying which attempt this is.
 
 ARGS are the arguments `slime-docker-start' was called with."
   (slime-cancel-connect-retry-timer)
-  (cl-destructuring-bind (&key init docker-machine mounts &allow-other-keys) args
+  (cl-destructuring-bind (&key docker-machine mounts &allow-other-keys) args
     (let ((result (slime-docker--poll-stdout proc retries attempt))
           (try-again-p t))
       (cond
@@ -525,8 +526,8 @@ IMAGE-NAME is a string naming the image that should be used to
 IMAGE-TAG is a string nameing the tag to use. Defaults to
   \"latest\".
 INIT is a function that should return a string to load and start
-  Swank. The function will be called with no arguments - but that
-  may change in a future version.
+  Swank. The function will be called with a plist of all
+  arguments passed to `slime-docker-start'
 CODING-SYSTEM is ignored.
 ENV an alist of environment variables to set in the docker
   container.
