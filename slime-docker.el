@@ -210,7 +210,7 @@ return the argument that should be passed to docker run to mount this volume."
   (cl-destructuring-bind ((host-vol . container-vol) &key read-only)
       mount
     (let ((base-string (format "--volume=%s:%s"
-                               (slime-docker--sanitize-pathname (expand-file-name host-vol))
+                               (slime-docker--sanitize-pathname host-vol)
                                container-vol)))
       (when read-only
         (setq base-string (concat base-string ":ro")))
@@ -492,6 +492,12 @@ MOUNTS is the mounts description Docker was started with."
   (slime-docker--start-swank-server proc args)
   (slime-docker--connect-when-ready proc nil 0 args))
 
+(defun slime-docker--canonicalize-mounts (mounts)
+  (mapcar (lambda (x)
+            (cl-list* (cons (expand-file-name (car (first x)))
+                            (cdr (first x)))
+                      (rest x)))
+          mounts))
 
 ;;;; User interaction
 
@@ -572,7 +578,8 @@ USERNS specifies the user namespace to use when starting the
          (args (list :program program :program-args program-args
                      :directory directory :name name :buffer buffer
                      :image-name image-name :image-tag image-tag
-                     :rm rm :env env :init init :mounts mounts
+                     :rm rm :env env :init init
+                     :mounts (slime-docker--canonicalize-mounts mounts)
                      :slime-mount-path slime-mount-path
                      :slime-read-only slime-mount-read-only
                      :uid uid
