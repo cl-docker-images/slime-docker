@@ -3,7 +3,7 @@
 ;; URL: https://github.com/daewok/slime-docker
 ;; Package-Requires: ((emacs "24") (slime "2.16") (docker-tramp "0.1") (cl-lib "0.5"))
 ;; Keywords: docker, lisp, slime
-;; Version: 0.7
+;; Version: 0.8
 
 
 ;;; License:
@@ -209,7 +209,9 @@ Given a mount description of the form:
 return the argument that should be passed to docker run to mount this volume."
   (cl-destructuring-bind ((host-vol . container-vol) &key read-only)
       mount
-    (let ((base-string (format "--volume=%s:%s" (slime-docker--sanitize-pathname host-vol) container-vol)))
+    (let ((base-string (format "--volume=%s:%s"
+                               (slime-docker--sanitize-pathname (expand-file-name host-vol))
+                               container-vol)))
       (when read-only
         (setq base-string (concat base-string ":ro")))
       base-string)))
