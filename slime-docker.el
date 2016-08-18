@@ -295,7 +295,7 @@ return the argument that should be passed to docker run to set the security opti
       ,@(mapcar #'slime-docker--mount-to-arg mounts)
       ,@(mapcar #'slime-docker--env-to-arg env)
       ,@(mapcar #'slime-docker--security-opt-to-arg security-opts)
-      ,@(mapcar #'slime-docker--port-to-args ports)
+      ,@(mapcar #'slime-docker--port-to-arg ports)
       ,@(when uid
           (list (format "--user=%s" uid)))
       ,@(when directory
