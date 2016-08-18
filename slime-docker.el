@@ -232,7 +232,7 @@ return the argument that should be passed to docker run to set variable to value
 
 Recognized properties are :ip, :host-port, and :container-port."
   (cl-destructuring-bind (&key host-port ip container-port) p
-    (concat "--port="
+    (concat "--publish="
             (if ip
                 (concat ip ":")
               "")
