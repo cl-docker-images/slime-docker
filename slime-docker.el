@@ -227,6 +227,27 @@ return the argument that should be passed to docker run to set variable to value
   (cl-destructuring-bind (var . val) e
     (concat "--env=" var "=" val)))
 
+(defun slime-docker--port-to-arg (p)
+  "Convert P, a plist, to a Docker argument.
+
+Recognized properties are :ip, :host-port, and :container-port."
+  (cl-destructuring-bind (&key host-port ip container-port) p
+    (concat "--port="
+            (if ip
+                (concat ip ":")
+              "")
+            (if host-port
+                (if (listp host-port)
+                    (format "%s-%s" (car host-port) (cdr host-port))
+                  (format "%s" host-port)))
+            (if (or ip host-port)
+                ":"
+              "")
+            (if container-port
+                (if (listp container-port)
+                    (format "%s-%s" (car container-port) (cdr container-port))
+                  (format "%s" container-port))))))
+
 (defun slime-docker--security-opt-to-arg (e)
   "Convert E, a pair, to a Docker argument.
 
@@ -264,6 +285,7 @@ return the argument that should be passed to docker run to set the security opti
                                security-opts
                                userns
                                dns
+                               ports
                                &allow-other-keys) args
     `("run"
       "-i"
@@ -273,6 +295,7 @@ return the argument that should be passed to docker run to set the security opti
       ,@(mapcar #'slime-docker--mount-to-arg mounts)
       ,@(mapcar #'slime-docker--env-to-arg env)
       ,@(mapcar #'slime-docker--security-opt-to-arg security-opts)
+      ,@(mapcar #'slime-docker--port-to-args ports)
       ,@(when uid
           (list (format "--user=%s" uid)))
       ,@(when directory
@@ -527,7 +550,8 @@ MOUNTS is the mounts description Docker was started with."
                                    (docker-machine-setenv t)
                                    security-opts
                                    userns
-                                   dns)
+                                   dns
+                                   ports)
   "Start a Docker container and Lisp process in the container then connect to it.
 
 If the slime-tramp contrib is also loaded (highly recommended),
@@ -583,7 +607,12 @@ USERNS specifies the user namespace to use when starting the
 DNS specifies a list of DNS servers to use in the container. If
   you're on a laptop, it's recommended to set this value as
   Docker does not update a container's DNS info while it is
-  running (for example if you change networks)."
+  running (for example if you change networks).
+PORTS is a list of port specifications to open in the docker
+  container. The port specifications are plists with the
+  properties :ip, :host-port, and :container-port. :ip must be a
+  string. :host-port and :container-port must be a number or a
+  cons cell."
   (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
                            mounts))
          (args (list :program program :program-args program-args
@@ -599,7 +628,8 @@ DNS specifies a list of DNS servers to use in the container. If
                      :docker-command docker-command
                      :security-opts security-opts
                      :userns userns
-                     :dns dns))
+                     :dns dns
+                     :ports ports))
          (proc (slime-docker--maybe-start-docker args)))
     (pop-to-buffer (process-buffer proc))
     (slime-docker--connect proc args)))
