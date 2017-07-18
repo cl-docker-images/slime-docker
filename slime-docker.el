@@ -94,12 +94,11 @@ the Emacs Lisp package.")
   :group 'slime)
 
 (defcustom slime-docker-ensure-mount-folders-exist t
-  "If non-NIL, ensure that folders that are mounted into a Docker
-  container exist before starting the container. This ensures
-  those folders are created owned by the current user instead of
-  root (which is the case if docker has to make the folder)."
-  :type 'boolean
-  :group 'slime-docker)
+  "If non-NIL, ensure that mounted folders exist before starting container.
+
+This ensures those folders are created owned by the current user
+instead of root (which is the case if docker has to make the
+folder)."  :type 'boolean :group 'slime-docker)
 
 (defvar slime-docker-machine-ssh-agent-helper-path nil
   "The location of the docker-run-ssh-agent-helper script.
@@ -108,6 +107,7 @@ computer and a docker container running on docker-machine.
 The default value is automatically computed.")
 
 (defun slime-docker-find-ssh-agent-helper ()
+  "Find the ssh agent helper if it exists."
   (cond
    ((file-exists-p (concat slime-docker--path "bin/docker-run-ssh-agent-helper"))
     (concat slime-docker--path "bin/docker-run-ssh-agent-helper"))
@@ -120,9 +120,10 @@ The default value is automatically computed.")
       (slime-docker-find-ssh-agent-helper))
 
 (defvar slime-docker-sbcl-seccomp-profile nil
-  "The location of the seccomp profile for SBCL (the default
-docker seccomp plus allowing the use of personality to disable
-ASLR.")
+  "The location of the seccomp profile for SBCL.
+
+Tthe default docker seccomp plus allowing the use of personality
+to disable ASLR.")
 
 (defun slime-docker--find-sbcl-seccomp-profile ()
   "Attempt to find the seccomp profile for SBCL."
@@ -153,7 +154,7 @@ Returns an alist."
       (let ((subexpr (match-string 1 env-string)))
         (save-match-data
           (unless (string-match "^export \\(.*\\)=\"\\(.*\\)\"$" subexpr)
-            (error "format of environment variable from `docker-machine env' different than expected."))
+            (error "Format of environment variable from `docker-machine env' different than expected"))
           (push (cons (match-string 1 subexpr) (match-string 2 subexpr))
                 out))
         (setq env-string (replace-match "" nil nil env-string 1))))
@@ -168,7 +169,9 @@ Returns a list of strings suitable for use with
           (slime-docker--machine-variables-alist machine)))
 
 (defun slime-docker--get-process-environment (args)
-  "Get the `process-environment' to run Docker in."
+  "Get the `process-environment' to run Docker in.
+
+ARGS is the plist of all args passed to top level function."
   (cl-destructuring-bind (&key docker-machine docker-machine-setenv &allow-other-keys)
       args
     (cond
@@ -265,7 +268,9 @@ return the argument that should be passed to docker run to set the security opti
     slime-docker--cid))
 
 (defun slime-docker--port (proc args)
-  "Given a Docker PROC, return the port that 4005 is mapped to."
+  "Given a Docker PROC, return the port that 4005 is mapped to.
+
+ARGS is the plist of all args passed to top level function."
   (cl-destructuring-bind (&key docker-command &allow-other-keys) args
     (let* ((process-environment (slime-docker--get-process-environment args))
            (port-string (shell-command-to-string
@@ -275,7 +280,9 @@ return the argument that should be passed to docker run to set the security opti
       (string-to-number (match-string 1 port-string)))))
 
 (defun slime-docker--make-docker-args (args)
-  "Given the user specified arguments, return a list of arguments to be passed to Docker to start a container."
+  "Return a list of arguments to be passed to Docker to start a container.
+
+ARGS is the plist of all args passed to top level function."
   (cl-destructuring-bind (&key program program-args
                                cid-file
                                image-name image-tag
@@ -331,7 +338,9 @@ return the argument that should be passed to docker run to set the security opti
     (mapc #'slime-docker--ensure-mount-folder-exists mounts)))
 
 (defun slime-docker--start-docker (buffer args)
-  "Start a Docker container in the given buffer.  Return the process."
+  "Start a Docker container in the given BUFFER.  Return the process.
+
+ARGS is the plist of all args passed to top level function."
   (cl-destructuring-bind (&key docker-command &allow-other-keys) args
     (with-current-buffer (get-buffer-create buffer)
       (comint-mode)
@@ -360,7 +369,9 @@ return the argument that should be passed to docker run to set the security opti
         proc))))
 
 (defun slime-docker--maybe-start-docker (args)
-  "Return a new or existing docker process."
+  "Return a new or existing docker process.
+
+ARGS is the plist of all args passed to top level function."
   (cl-destructuring-bind (&key buffer &allow-other-keys) args
     (cond
      ((not (comint-check-proc buffer))
@@ -414,7 +425,9 @@ MOUNTS is the mounts description that Docker was started with."
 
 
 (defun slime-docker--init-command (args)
-  "Return a string to initialize Lisp."
+  "Return a string to initialize Lisp.
+
+ARGS is the plist of all args passed to top level function."
   (cl-destructuring-bind (&key slime-mount-path &allow-other-keys)
       args
     (let ((loader (if (file-name-absolute-p slime-backend)
@@ -517,6 +530,8 @@ ARGS are the arguments `slime-docker-start' was called with."
 (defun slime-docker--connect (proc args)
   "Start SWANK in PROC and connect to it.
 
+ARGS is the plist of all args passed to top level function.
+
 INIT is a function that returns the string to start SWANK.
 
 MOUNTS is the mounts description Docker was started with."
@@ -524,6 +539,7 @@ MOUNTS is the mounts description Docker was started with."
   (slime-docker--connect-when-ready proc nil 0 args))
 
 (defun slime-docker--canonicalize-mounts (mounts)
+  "Canonicalize the mount names from MOUNTS."
   (mapcar (lambda (x)
             (cl-list* (cons (expand-file-name (car (first x)))
                             (cdr (first x)))
