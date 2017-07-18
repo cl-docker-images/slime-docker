@@ -390,7 +390,9 @@ HOSTNAME is the hostname of the Docker container."
     (if matching-mount
         (replace-match (car (car matching-mount)) nil t lisp-filename)
       ;; else, fall back to TRAMP
-      (tramp-make-tramp-file-name "docker" nil hostname lisp-filename))))
+      (if (version< emacs-version "26.0.0")
+          (tramp-make-tramp-file-name "docker" nil hostname lisp-filename)
+        (tramp-make-tramp-file-name "docker" nil nil hostname nil lisp-filename)))))
 
 (defun slime-docker--translate-filename->lisp (emacs-filename mounts)
   "Translate the EMACS-FILENAME into a filename that Lisp can open.
