@@ -329,7 +329,8 @@ ARGS is the plist of all args passed to top level function."
   "Ensures the host folder in requested MOUNT-DESCRIPTION exists."
   (cl-destructuring-bind ((host-vol . container-vol) &rest opts)
       mount-description
-    (make-directory host-vol t)))
+    (unless (file-exists-p host-vol)
+      (make-directory host-vol t))))
 
 (defun slime-docker--ensure-mount-folders-exist (args)
   "Ensures that all host folders in requested mounts of ARGS exist."
