@@ -542,9 +542,9 @@ MOUNTS is the mounts description Docker was started with."
 (defun slime-docker--canonicalize-mounts (mounts)
   "Canonicalize the mount names from MOUNTS."
   (mapcar (lambda (x)
-            (cl-list* (cons (expand-file-name (car (first x)))
-                            (cdr (first x)))
-                      (rest x)))
+            (cl-list* (cons (expand-file-name (car (cl-first x)))
+                            (cdr (cl-first x)))
+                      (cl-rest x)))
           mounts))
 
 ;;;; User interaction
