@@ -293,9 +293,12 @@ ARGS is the plist of all args passed to top level function."
                                userns
                                dns
                                ports
+                               network
                                &allow-other-keys) args
     `("run"
       "-i"
+      ,@(when network
+          (list (format "--network=%s" network)))
       ,(concat "--cidfile=" cid-file)
       "-p" ,(concat (if docker-machine "" "127.0.0.1::") "4005")
       ,(format "--rm=%s" (if rm "true" "false"))
@@ -571,7 +574,8 @@ MOUNTS is the mounts description Docker was started with."
                                    security-opts
                                    userns
                                    dns
-                                   ports)
+                                   ports
+                                   network)
   "Start a Docker container and Lisp process in the container then connect to it.
 
 If the slime-tramp contrib is also loaded (highly recommended),
@@ -648,6 +652,7 @@ PORTS is a list of port specifications to open in the docker
                      :docker-command docker-command
                      :security-opts security-opts
                      :userns userns
+                     :network network
                      :dns dns
                      :ports ports))
          (proc (slime-docker--maybe-start-docker args)))
