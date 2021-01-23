@@ -533,6 +533,20 @@ MOUNTS is the mounts description Docker was started with."
                             (cdr (cl-first x)))
                       (cl-rest x)))
           mounts))
+
+(defun slime-docker--slime-path ()
+  "Return the path to the slime directory.
+
+This will let us mount it into the container.  Normally we could
+use `slime-path', but some package managers (straight.el) use
+symlinks to separate the build folder from the actual repo.
+Since the symlinks are invalid in the container, we check to see
+if slime.el is a symlink and dereference it if it is."
+  (let ((symlink-path (file-symlink-p (concat slime-path "slime.el"))))
+    (if symlink-path
+        (file-name-directory symlink-path)
+      slime-path)))
+
 
 ;;;; User interaction
 
@@ -620,7 +634,8 @@ PORTS is a list of port specifications to open in the docker
   properties :ip, :host-port, and :container-port. :ip must be a
   string. :host-port and :container-port must be a number or a
   cons cell."
-  (let* ((mounts (cl-list* `((,slime-path . ,slime-mount-path) :read-only ,slime-mount-read-only)
+  (let* ((mounts (cl-list* `((,(slime-docker--slime-path) . ,slime-mount-path)
+                             :read-only ,slime-mount-read-only)
                            mounts))
          (args (list :program program :program-args program-args
                      :directory directory :name name :buffer buffer

@@ -5,6 +5,7 @@
 - Add support for providing network to Docker run.
 - Add ports option.
 - Add dns option.
+- Support for SLIME installed via straight.el
 
 ### Removed
 
