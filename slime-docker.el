@@ -119,23 +119,6 @@ The default value is automatically computed.")
 (setq slime-docker-machine-ssh-agent-helper-path
       (slime-docker-find-ssh-agent-helper))
 
-(defvar slime-docker-sbcl-seccomp-profile nil
-  "The location of the seccomp profile for SBCL.
-
-Tthe default docker seccomp plus allowing the use of personality
-to disable ASLR.")
-
-(defun slime-docker--find-sbcl-seccomp-profile ()
-  "Attempt to find the seccomp profile for SBCL."
-  (cond
-   ((file-exists-p (concat slime-docker--path "resources/docker-sbcl-seccomp.json"))
-    (concat slime-docker--path "resources/docker-sbcl-seccomp.json"))
-   (t
-    nil)))
-
-(setq slime-docker-sbcl-seccomp-profile
-      (slime-docker--find-sbcl-seccomp-profile))
-
 
 ;;;; Docker machine integration
 (defun slime-docker--machine-get-env-string (machine)
