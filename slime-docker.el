@@ -98,7 +98,19 @@ the Emacs Lisp package.")
 
 This ensures those folders are created owned by the current user
 instead of root (which is the case if docker has to make the
-folder)."  :type 'boolean :group 'slime-docker)
+folder)."
+  :type 'boolean :group 'slime-docker)
+
+(defcustom slime-docker-uid t
+  "The default value for the UID argument to `slime-docker-start'.
+
+If T (default), the UID of the current user is used.
+
+If NIL, the UID of the container is not specified.
+
+If an integer, that UID is used."
+  :type '(choice boolean integer)
+  :group 'slime-docker)
 
 (defvar slime-docker-machine-ssh-agent-helper-path nil
   "The location of the docker-run-ssh-agent-helper script.
@@ -547,6 +559,17 @@ if slime.el is a symlink and dereference it if it is."
         (file-name-directory symlink-path)
       slime-path)))
 
+(defun slime-docker--determine-uid (uid-arg docker-machine)
+  "Determine the UID to use for the container.
+
+If T, returns the UID of the current user or 1000 if docker
+machine is being used.  Otherwise simply returns `uid-arg'."
+  (if (eql uid-arg t)
+      (if docker-machine
+          1000
+        (user-uid))
+    uid-arg))
+
 
 ;;;; User interaction
 
@@ -564,7 +587,7 @@ if slime.el is a symlink and dereference it if it is."
                                    coding-system
                                    (slime-mount-path "/usr/local/share/common-lisp/source/slime/")
                                    (slime-mount-read-only t)
-                                   uid
+                                   (uid slime-docker-uid)
                                    docker-machine
                                    (docker-command "docker")
                                    (docker-machine-setenv t)
@@ -644,7 +667,7 @@ PORTS is a list of port specifications to open in the docker
                      :mounts (slime-docker--canonicalize-mounts mounts)
                      :slime-mount-path slime-mount-path
                      :slime-read-only slime-mount-read-only
-                     :uid uid
+                     :uid (slime-docker--determine-uid uid docker-machine)
                      :docker-machine docker-machine
                      :docker-machine-setenv (and docker-machine docker-machine-setenv)
                      :docker-command docker-command

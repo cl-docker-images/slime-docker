@@ -5,7 +5,9 @@
 - Add support for providing network to Docker run.
 - Add ports option.
 - Add dns option.
-- Support for SLIME installed via straight.el
+- Support for SLIME installed via straight.el.
+- If uid argument is T (default), the container is started with the UID of the
+  current user.
 
 ### Removed
 
