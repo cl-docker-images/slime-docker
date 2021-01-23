@@ -8,6 +8,7 @@
 - Support for SLIME installed via straight.el.
 - If uid argument is T (default), the container is started with the UID of the
   current user.
+- Add gid argument with same behavior as uid argument.
 
 ### Removed
 

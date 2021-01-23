@@ -112,6 +112,17 @@ If an integer, that UID is used."
   :type '(choice boolean integer)
   :group 'slime-docker)
 
+(defcustom slime-docker-gid t
+  "The default value for the GID argument to `slime-docker-start'.
+
+If T (default), the GID of the current user is used.
+
+If NIL, the GID of the container is not specified.
+
+If an integer, that GID is used."
+  :type '(choice boolean integer)
+  :group 'slime-docker)
+
 (defvar slime-docker-machine-ssh-agent-helper-path nil
   "The location of the docker-run-ssh-agent-helper script.
 This script is used to help share an SSH-Agent between the host
@@ -283,6 +294,7 @@ ARGS is the plist of all args passed to top level function."
                                image-name image-tag
                                rm mounts env directory
                                uid
+                               gid
                                docker-machine
                                security-opts
                                userns
@@ -302,7 +314,9 @@ ARGS is the plist of all args passed to top level function."
       ,@(mapcar #'slime-docker--security-opt-to-arg security-opts)
       ,@(mapcar #'slime-docker--port-to-arg ports)
       ,@(when uid
-          (list (format "--user=%s" uid)))
+          (if gid
+              (list (format "--user=%s:%s" uid gid))
+            (list (format "--user=%s" uid))))
       ,@(when directory
           (list (format "--workdir=%s" directory)))
       ,@(when userns
@@ -570,6 +584,17 @@ machine is being used.  Otherwise simply returns `uid-arg'."
         (user-uid))
     uid-arg))
 
+(defun slime-docker--determine-gid (gid-arg docker-machine)
+  "Determine the GID to use for the container.
+
+If T, returns the UID of the current user or 1000 if docker
+machine is being used.  Otherwise simply returns `uid-arg'."
+  (if (eql gid-arg t)
+      (if docker-machine
+          1000
+        (group-gid))
+    gid-arg))
+
 
 ;;;; User interaction
 
@@ -588,6 +613,7 @@ machine is being used.  Otherwise simply returns `uid-arg'."
                                    (slime-mount-path "/usr/local/share/common-lisp/source/slime/")
                                    (slime-mount-read-only t)
                                    (uid slime-docker-uid)
+                                   (gid slime-docker-gid)
                                    docker-machine
                                    (docker-command "docker")
                                    (docker-machine-setenv t)
@@ -621,8 +647,8 @@ RM if true, the container is removed when the process closes.
 MOUNTS a list describing the voluments to mount into the
   container. It is of the form:
   (((HOST-PATH . CONTAINER-PATH) &key READ-ONLY) ... )
-UID if specified, sets the UID of the Lisp process in the
-  container.
+UID sets the UID of the Lisp process in the container.
+GID sets the GID of the Lisp process in the container.
 SLIME-MOUNT-PATH the location where to mount SLIME into the
   container defaults to
   /usr/local/share/common-lisp/source/slime/
@@ -668,6 +694,7 @@ PORTS is a list of port specifications to open in the docker
                      :slime-mount-path slime-mount-path
                      :slime-read-only slime-mount-read-only
                      :uid (slime-docker--determine-uid uid docker-machine)
+                     :gid (slime-docker--determine-gid gid docker-machine)
                      :docker-machine docker-machine
                      :docker-machine-setenv (and docker-machine docker-machine-setenv)
                      :docker-command docker-command
