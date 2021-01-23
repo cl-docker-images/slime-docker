@@ -38,8 +38,8 @@
 ;; to use in the variable `slime-docker-implementations'.  Then, run
 ;; `slime-docker' and away you go.
 ;;
-;; The default image used by this package is daewok/lisp-devel:latest
-;; (https://hub.docker.com/r/daewok/lisp-devel/)
+;; The default image used by this package is clfoundation/cl-devel:latest
+;; (https://hub.docker.com/r/clfoundation/cl-devel/)
 ;;
 ;; SLIME is hard to use directly with Docker containers because its
 ;; initialization routine is not very flexible.  It requires that both Lisp and
@@ -541,7 +541,7 @@ MOUNTS is the mounts description Docker was started with."
                                    directory
                                    name
                                    (buffer "*docker-lisp*")
-                                   (image-name "daewok/lisp-devel")
+                                   (image-name "clfoundation/cl-devel")
                                    (image-tag "latest")
                                    (rm t)
                                    env

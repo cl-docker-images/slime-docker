@@ -15,9 +15,10 @@ enabled, this package will be able to let you use `M-.` and friends to visit
 files that are both locally on your machine and inside the container.
 
 This package defaults to using
-[`daewok/lisp-devel:latest`](https://hub.docker.com/r/daewok/lisp-devel/) as the
-Docker image. It contains SBCL, ABCL, CCL, and ECL along with Quicklisp and the
-external libraries necessary to compile most of the packages in Quicklisp.
+[`clfoundation/cl-devel:latest`](https://hub.docker.com/r/clfoundation/cl-devel/)
+as the Docker image. It contains SBCL, ABCL, CCL, and ECL along with Quicklisp
+and the external libraries necessary to compile most of the packages in
+Quicklisp.
 
 ## Why not use SLIME directly? ##
 
@@ -119,7 +120,7 @@ guess the correct Lisp to start based on prefix arguments and the values of
 
 `COMMAND` is the command to run in the Docker container.
 
-+ `(slime-docker-start &key (program inferior-lisp-program) program-args directory name (buffer "*docker-lisp*") (image-name "daewok/lisp-devel") (image-tag "latest") (rm t) env (init 'slime-docker--init-command) mounts coding-system (slime-mount-path "/usr/local/share/common-lisp/source/slime/") (slime-mount-read-only t) uid docker-machine (docker-command "docker") (docker-machine-setenv t) security-opts`
++ `(slime-docker-start &key (program inferior-lisp-program) program-args directory name (buffer "*docker-lisp*") (image-name "clfoundation/cl-devel") (image-tag "latest") (rm t) env (init 'slime-docker--init-command) mounts coding-system (slime-mount-path "/usr/local/share/common-lisp/source/slime/") (slime-mount-read-only t) uid docker-machine (docker-command "docker") (docker-machine-setenv t) security-opts`
 
 Start a Docker container and Lisp process in the container then connect to it.
 
