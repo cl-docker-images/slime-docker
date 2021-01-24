@@ -6,19 +6,87 @@ This emacs package is designed to easily integrate
 containers. It can launch a container from an image, start a Lisp, and then
 connect to it using SLIME.
 
-To get started, describe the Lisp implementations and Docker images you want to
-use in the variable `slime-docker-implementations`. Then, run `M-- M-x slime-docker`
-and away you go.
+If you already have SLIME installed and your favorite implementation specified
+in `inferior-lisp-program`, all you should need to do is run `M-x
+slime-docker`. Otherwise, see the Quickstart.
 
-It is highly recommended that you enable the `slime-tramp` contrib. If that is
-enabled, this package will be able to let you use `M-.` and friends to visit
-files that are both locally on your machine and inside the container.
+## Quickstart ##
+
+On most machines nowadays, all you should need to do in order to use this is
+install Docker, set it up so that you can run docker without using sudo, and
+then install this package. Assuming you're using `use-package`, the following
+should be sufficient:
+
+```elisp
+(use-package slime-docker
+  :custom
+  (slime-docker-program "sbcl"))
+```
+
+Then run `M-x slime-docker`
+
+This will set you up to use sbcl inside a Docker container. Feel free to change
+the default implementation or perform other customizations.
+
+If you are using Docker machine, you likely have to add the following
+customization as well:
+
+```elisp
+(slime-docker-docker-machine "default")
+```
+
+This package has not been tested on machines that require super user access to
+connect to the Docker socket. However, it may be possible if you write a script
+that handles all the authentication and use that script for
+`slime-docker-docker-command`.
+
+## Default Image ##
 
 This package defaults to using
 [`clfoundation/cl-devel:latest`](https://hub.docker.com/r/clfoundation/cl-devel/)
 as the Docker image. It contains SBCL, ABCL, CCL, and ECL along with Quicklisp
 and the external libraries necessary to compile most of the packages in
 Quicklisp.
+
+If you will be using the default image for serious development, it is
+recommended that you mount a folder on top of `/home/cl` such that you can
+persist configuration changes and fasl caches between containers. Below is the
+recommended configuration for this:
+
+```elisp
+(use-package slime-docker
+  :custom
+  (slime-docker-program "sbcl")
+  (slime-docker-mounts `(((,(expand-file-name "~/cl-devel/") . "/home/cl/")))))
+```
+
+One hiccupp is that the image comes with some folders in `/home/cl` to provide
+the default config. If you want to use this default config as a starting point
+for your own, simply run the `unpack-default-home-dir` command in the
+container. You can do this from Lisp using:
+
+```common-lisp
+(require :asdf)
+(uiop:run-program '("unpack-default-home-dir"))
+```
+
+You may want to restart your Lisp after that in order to take advantage of the
+newly written config.
+
+## Multiple Configurations ##
+
+If you would like to define a list of potential configurations to use, set them
+in `slime-docker-implementations`. You can then choose from these
+implementations using `M-- M-x slime-docker`.
+
+Patches to put a sane defcustom interface on top of
+`slime-docker-implementations` are welcome!
+
+## Other Packages ##
+
+It is highly recommended that you enable the `slime-tramp` contrib. If that is
+enabled, this package will be able to let you use `M-.` and friends to visit
+files that are both locally on your machine and inside the container.
 
 ## Why not use SLIME directly? ##
 
@@ -40,146 +108,3 @@ which port 4005 has been forwarded to. Additionally, it automates the
 integration with docker-machine (very nice for Windows and OSX users) and
 provides access to many of the options to `docker run` (e.g. setting environment
 variables, mounting folders, and so on).
-
-## Quickstart ##
-
-These instructions will get you up and running using SBCL on a Linux machine
-without docker-machine.
-
-  1. Install slime-docker. I recommend using
-     [MELPA](http://melpa.org/#/getting-started) if you haven't already installed
-     slime-docker manually.
-
-  2. Add the following to your Emacs config:
-
-     ```elisp
-     ;; Do some standard SLIME configuration.
-     (slime-setup '(slime-fancy slime-tramp))
-     ;; Set the default lisp you want to use (here it's SBCL).
-     (setq inferior-lisp-program "sbcl")
-     ```
-  3. Run `M-x slime-docker`
-
-
-You have to do a little more work to use this with docker-machine, as it
-requires some environment variables to be set before the `docker` command will
-work. These instructions will get you up and running on any OS with
-docker-machine.
-
-  1. Install slime-docker. I recommend using
-     [MELPA](http://melpa.org/#/getting-started) if you haven't already installed
-     slime-docker manually.
-
-  2. Make sure `docker-machine` is on your PATH. OSX users may find it useful to
-     use [exec-path-from-shell](https://github.com/purcell/exec-path-from-shell)
-     for this.
-
-  3. Make sure the virtual machine that you want to use is running.
-
-  4. Add the following to your Emacs config:
-
-     ```elisp
-     ;; Do some standard SLIME configuration.
-     (slime-setup '(slime-fancy slime-tramp))
-     ;; We'll use sbcl here, but we need to tell slime-docker that we're using
-     ;; docker-machine. Change "default" to the name of the machine you're using.
-     (setq slime-docker-implementations `((sbcl ("sbcl") :docker-machine "default")))
-     ```
-  5. Run `M-x slime-docker`
-
-## Documentation ##
-
-### Variables ###
-
-+ `SLIME-DOCKER-IMPLEMENTATIONS`
-
-A list of known Lisp implementations running on Docker.  The list should have
-the form: `((NAME (PROGRAM PROGRAM-ARGS ...) &key KEYWORD-ARGS) ...)`
-
-`NAME` is a symbol for the implementation.
-
-`PROGRAM` and `PROGRAM-ARGS` are strings used to start the Lisp process inside
-the Docker container.
-
-For `KEYWORD-ARGS` see `SLIME-DOCKER-START`.
-
-+ `SLIME-DOCKER-DEFAULT-LISP`
-
-The name of the default Lisp implementation for `SLIME-DOCKER`.  See
-`SLIME-DOCKER-IMPLEMENTATIONS`.
-
-### Functions ###
-
-+ `(slime-docker &optional command)`
-
-Launch a Lisp process in a Docker container and connect SLIME to it.
-
-The normal entry point to slime-docker.el. Similar to `SLIME` function. Tries to
-guess the correct Lisp to start based on prefix arguments and the values of
-`SLIME-DOCKER-IMPLEMENTATIONS` and `SLIME-DOCKER-DEFAULT-LISP`.
-
-`COMMAND` is the command to run in the Docker container.
-
-+ `(slime-docker-start &key (program inferior-lisp-program) program-args directory name (buffer "*docker-lisp*") (image-name "clfoundation/cl-devel") (image-tag "latest") (rm t) env (init 'slime-docker--init-command) mounts coding-system (slime-mount-path "/usr/local/share/common-lisp/source/slime/") (slime-mount-read-only t) uid docker-machine (docker-command "docker") (docker-machine-setenv t) security-opts`
-
-Start a Docker container and Lisp process in the container then connect to it.
-
-Use when `SLIME-DOCKER` is not sufficient. Keyword arguments are also used in
-`SLIME-DOCKER-IMPLEMENTATIONS`.
-
-If the slime-tramp contrib is also loaded (highly recommended), this will also
-set up the appropriate tramp translations to view and edit files in the spawned
-container.
-
-`PROGRAM` and `PROGRAM-ARGS` are the filename and argument strings for the Lisp
-process.
-
-`IMAGE-NAME` is a string naming the image that should be used to start the
-container.
-
-`IMAGE-TAG` is a string nameing the tag to use. Defaults to "latest".
-
-`INIT` is a function that should return a string to load and start Swank. The
-function will be called with no arguments - but that may change in a future
-version.
-
-`CODING-SYSTEM` is ignored.
-
-`ENV` an alist of environment variables to set in the docker container.
-
-`BUFFER` the name of the buffer to use for the subprocess.
-
-`NAME` a symbol to describe the Lisp implementation.
-
-`DIRECTORY` set this as the working directory in the container.
-
-`RM` if true, the container is removed when the process closes.
-
-`MOUNTS` a list describing the voluments to mount into the container. It is of
-the form: `(((HOST-PATH . CONTAINER-PATH) &key READ-ONLY) ... )`
-
-`UID` if specified, sets the UID of the Lisp process in the container.
-
-`SLIME-MOUNT-PATH` the location where to mount SLIME into the container defaults
-to "/usr/local/share/common-lisp/source/slime/"
-
-`SLIME-MOUNT-READ-ONLY` if non-NIL, SLIME is mounted into the container as
-read-only. Defaults to T.
-
-`DOCKER-MACHINE` if non-NIL, must be a string naming a machine name known to
-docker-machine. If provided, used to set appropriate environment variables for
-the docker process to communicate with the desired machine. Does not start the
-machine if it is currently not running.
-
-`DOCKER-COMMAND` is the command to use when interacting with docker. Defaults to
-"docker". See `SLIME-DOCKER-MACHINE-SSH-AGENT-HELPER-PATH` if you are using
-docker-machine and would like to share your SSH Agent with the container.
-
-`DOCKER-MACHINE-SETENV` if non-NIL, uses `setenv` to set Emacs environment with
-the necessary variables from docker-machine. Should be non-NIL if you expect
-tramp to work with images running in docker machine.
-
-`SECURITY-OPTS` specifies --security-opt options when running 'docker run'. Must
-be an alist where keys and values are strings. See README for note on using this
-with SBCL.
-
