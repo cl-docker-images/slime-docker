@@ -1,5 +1,11 @@
 ## Unreleased
 
+## v0.8.2 - January 24, 2021
+
+### Removed
+
+- Removed coding-system arg.
+
 ## v0.8.1 - January 24, 2021
 
 ### Changed

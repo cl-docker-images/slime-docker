@@ -817,13 +817,7 @@ The rules for selecting the arguments are rather complicated:
                 (read-shell-command "Run lisp: " (or slime-docker-program
                                                      inferior-lisp-program)
                                     'slime-docker--inferior-lisp-program-history))
-             (let ((coding-system
-                    (if (eq 16 (prefix-numeric-value current-prefix-arg))
-                        (read-coding-system "set slime-coding-system: "
-                                            slime-net-coding-system)
-                      slime-net-coding-system)))
-               (list :program program :program-args program-args
-                     :coding-system coding-system)))))))
+             (list :program program :program-args program-args))))))
 
 ;;;###autoload
 (defun slime-docker (&optional command)
