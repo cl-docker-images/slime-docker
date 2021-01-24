@@ -80,6 +80,9 @@ See `slime-docker-implementations'")
 (defvar slime-docker--cid nil
   "A buffer local variable in the inferior proccess.")
 
+(defvar slime-docker--cid-file nil
+  "A buffer local variable in the inferior proccess.")
+
 (defvar slime-docker--inferior-lisp-program-history '()
   "History list of command strings.  Used by `slime-docker'.")
 
@@ -353,7 +356,10 @@ ARGS is the plist of all args passed to top level function."
 (defun slime-docker--start-docker (buffer args)
   "Start a Docker container in the given BUFFER.  Return the process.
 
-ARGS is the plist of all args passed to top level function."
+ARGS is the plist of all args passed to top level function.
+
+The `slime-docker--cid-file' variable is made local in the BUFFER
+and set to the file where the container ID will be written."
   (cl-destructuring-bind (&key docker-command &allow-other-keys) args
     (with-current-buffer (get-buffer-create buffer)
       (comint-mode)
@@ -367,14 +373,8 @@ ARGS is the plist of all args passed to top level function."
         (comint-exec (current-buffer) "docker-lisp" docker-command nil
                      (slime-docker--make-docker-args (cl-list* :cid-file cid-file args)))
         (make-local-variable 'slime-docker--cid)
-        ;; Wait for cid-file to exist.
-        (while (not (file-exists-p cid-file))
-          (sit-for 0.1))
-	(let ((cid (slime-docker--read-cid cid-file)))
-	  (while (string-equal "" cid)
-	    (sit-for 0.1)
-	    (setq cid (slime-docker--read-cid cid-file)))
-	  (setq slime-docker--cid cid)))
+        (make-local-variable 'slime-docker--cid-file)
+        (setq slime-docker--cid-file cid-file))
       (lisp-mode-variables t)
       (let ((proc (get-buffer-process (current-buffer))))
         ;; TODO: deal with closing process when exiting?
@@ -465,7 +465,7 @@ ARGS are the arguments `slime-docker-start' was called with."
         (insert-before-markers str)
         (process-send-string proc str)))))
 
-(defun slime-docker--poll-stdout (proc _retries attempt)
+(defun slime-docker--poll-stdout (proc attempt)
   "Return T when swank is ready for connections.
 
 Get the PROC buffer contents, and try to find the string:
@@ -495,62 +495,47 @@ container."
 
 (add-hook 'slime-connected-hook 'slime-docker--connected-hook-function t)
 
-(defun slime-docker--connect-when-ready (proc retries attempt args)
-  "Connect to SWANK when it is ready for connections.
-
-Checks Lisp's stdout in PROC to see if SWANK is ready.  If it is,
-connects.
-
-Otherwise, if there are RETRIES remaining, schedules itself to be
-run again in the future.
-
-ATTEMPT is a number saying which attempt this is.
-
-ARGS are the arguments `slime-docker-start' was called with."
-  (slime-cancel-connect-retry-timer)
-  (cl-destructuring-bind (&key docker-machine mounts &allow-other-keys) args
-    (let ((result (slime-docker--poll-stdout proc retries attempt))
-          (try-again-p t))
-      (cond
-       ((numberp result)
-        (setq retries result))
-       (result
-        (setq try-again-p nil)
-        (sit-for 0.2)
-        (let* ((ip (if docker-machine (slime-docker--machine-ip docker-machine) "127.0.0.1"))
-               (c (slime-connect ip (slime-docker--port proc args)))
-               (hostname (slime-docker--hostname proc)))
-          (slime-set-inferior-process c proc)
-          (when (boundp 'slime-filename-translations)
-            (push (list (concat "^" hostname "$")
-                        (lambda (emacs-filename)
-                          (slime-docker--translate-filename->lisp emacs-filename mounts))
-                        (lambda (lisp-filename)
-                          (slime-docker--translate-filename->emacs lisp-filename mounts hostname)))
-                  slime-filename-translations))))
-       ((and retries (zerop retries))
-        (setq try-again-p nil)
-        (message "Gave up connection to Swank after %d attempts." attempt))
-       ((eq (process-status proc) 'exit)
-        (setq try-again-p nil)
-        (message "Failed to connect to Swank: inferior process exited.")))
-      (when try-again-p
-        (setq slime-connect-retry-timer
-              (run-with-timer 0.3 nil
-                              #'slime-timer-call #'slime-docker--connect-when-ready
-                              proc (and retries (1- retries)) (1+ attempt)
-                              args))))))
-
-(defun slime-docker--connect (proc args)
-  "Start SWANK in PROC and connect to it.
+(cl-defun slime-docker--connect (proc args &optional (state 'waiting-for-cid-file) (attempt 0))
+  "Implements a state machine to connect to SWANK in PROC.
 
 ARGS is the plist of all args passed to top level function.
 
-INIT is a function that returns the string to start SWANK.
+STATE is one of the following:
 
-MOUNTS is the mounts description Docker was started with."
-  (slime-docker--start-swank-server proc args)
-  (slime-docker--connect-when-ready proc nil 0 args))
+`waiting-for-cid-file'"
+  (slime-cancel-connect-retry-timer)
+  (with-current-buffer (process-buffer proc)
+    (cl-case state
+      (waiting-for-cid-file
+       (when (file-exists-p slime-docker--cid-file)
+         (setq state 'waiting-for-cid)))
+      (waiting-for-cid
+       (let ((cid (slime-docker--read-cid slime-docker--cid-file)))
+         (unless (string-equal "" cid)
+           (setq slime-docker--cid cid
+                 state 'waiting-for-slime)
+           (slime-docker--start-swank-server proc args))))
+      (waiting-for-slime
+       (let ((result (slime-docker--poll-stdout proc attempt)))
+         (when result
+           (cl-destructuring-bind (&key docker-machine mounts &allow-other-keys) args
+             (let* ((ip (if docker-machine (slime-docker--machine-ip docker-machine) "127.0.0.1"))
+                    (c (slime-connect ip (slime-docker--port proc args)))
+                    (hostname (slime-docker--hostname proc)))
+               (slime-set-inferior-process c proc)
+               (when (boundp 'slime-filename-translations)
+                 (push (list (concat "^" hostname "$")
+                             (lambda (emacs-filename)
+                               (slime-docker--translate-filename->lisp emacs-filename mounts))
+                             (lambda (lisp-filename)
+                               (slime-docker--translate-filename->emacs lisp-filename mounts hostname)))
+                       slime-filename-translations))))
+           (setq state 'done))
+         (setq attempt (1+ attempt))))))
+  (unless (eql state 'done)
+    (setq slime-connect-retry-timer
+          (run-with-timer 0.3 nil #'slime-timer-call
+                          #'slime-docker--connect proc args state attempt))))
 
 (defun slime-docker--canonicalize-mounts (mounts)
   "Canonicalize the mount names from MOUNTS."

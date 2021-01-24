@@ -22,3 +22,4 @@
 - Check if file exists before running MAKE-DIRECTORY.
 - Fix TRAMP-MAKE-TRAMP-FILE-NAME for Emacs 26.
 - Expand file names before mounting them.
+- Emacs no longer hangs if the image needs to be pulled.
