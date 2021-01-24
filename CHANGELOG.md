@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.8 - January 24, 2021
+
 ### Added
 
 - Add support for providing network to Docker run.
