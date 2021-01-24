@@ -9,6 +9,7 @@
 - If uid argument is T (default), the container is started with the UID of the
   current user.
 - Add gid argument with same behavior as uid argument.
+- Add `defcustom`s for most arguments.
 
 ### Removed
 

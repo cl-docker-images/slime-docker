@@ -104,6 +104,91 @@ instead of root (which is the case if docker has to make the
 folder)."
   :type 'boolean :group 'slime-docker)
 
+(defcustom slime-docker-program nil
+  "The default program to run in the container."
+  :type '(choice (const :tag "Use `inferior-lisp-program'" nil)
+                 string)
+  :group 'slime-docker)
+
+(defcustom slime-docker-program-args nil
+  "The default arguments for the program to run in the container."
+  :type '(repeat string)
+  :group 'slime-docker)
+
+(defcustom slime-docker-directory nil
+  "The default working directory in the container."
+  :type 'string
+  :group 'slime-docker)
+
+(defcustom slime-docker-image-name "clfoundation/cl-devel"
+  "The default image to use."
+  :type 'string
+  :group 'slime-docker)
+
+(defcustom slime-docker-image-tag "latest"
+  "The default image tag."
+  :type 'string
+  :group 'slime-docker)
+
+(defcustom slime-docker-rm t
+  "If non-NIL, the container is removed after the Lisp is exited."
+  :type 'boolean
+  :group 'slime-docker)
+
+(defcustom slime-docker-env nil
+  "The default environment to start the container with."
+  :type '(alist :key-type string :value-type string)
+  :group 'slime-docker)
+
+(defcustom slime-docker-mounts nil
+  "The default mounts for the container."
+  :type '(repeat
+          (list (cons string string)
+                (plist :key-type (const :read-only)
+                       :value-type boolean)))
+  :group 'slime-docker)
+
+(defcustom slime-docker-slime-mount-path "/usr/local/share/common-lisp/source/slime/"
+  "Where to mount the SLIME source code in the container."
+  :type 'string
+  :group 'slime-docker)
+
+(defcustom slime-docker-slime-mount-read-only t
+  "If non-NIL, SLIME is mounted into the container as read only."
+  :type 'boolean
+  :group 'slime-docker)
+
+(defcustom slime-docker-docker-machine nil
+  "If non-NIL, names the default docker-machine instance."
+  :type '(choice (const nil)
+                 string)
+  :group 'slime-docker)
+
+(defcustom slime-docker-docker-command "docker"
+  "The command for the Docker CLI client."
+  :type 'string
+  :group 'slime-docker)
+
+(defcustom slime-docker-machine-security-opts nil
+  "Default security options to pass to the container."
+  :type '(alist :key-type string :value-type string)
+  :group 'slime-docker)
+
+(defcustom slime-docker-userns nil
+  "If non-NIL, names the default user namespace to use when starting the container."
+  :type '(choice (const nil) string)
+  :group 'slime-docker)
+
+(defcustom slime-docker-dns nil
+  "The default list of DNS servers to use in the container."
+  :type '(repeat string)
+  :group 'slime-docker)
+
+(defcustom slime-docker-network nil
+  "The network to run the container on."
+  :type 'string
+  :group 'slime-docker)
+
 (defcustom slime-docker-uid t
   "The default value for the UID argument to `slime-docker-start'.
 
@@ -584,29 +669,30 @@ machine is being used.  Otherwise simply returns `uid-arg'."
 ;;;; User interaction
 
 ;;;###autoload
-(cl-defun slime-docker-start (&key (program inferior-lisp-program) program-args
-                                   directory
+(cl-defun slime-docker-start (&key (program slime-docker-program)
+                                   (program-args slime-docker-program-args)
+                                   (directory slime-docker-directory)
                                    name
                                    (buffer "*docker-lisp*")
-                                   (image-name "clfoundation/cl-devel")
-                                   (image-tag "latest")
-                                   (rm t)
-                                   env
+                                   (image-name slime-docker-image-name)
+                                   (image-tag slime-docker-image-tag)
+                                   (rm slime-docker-rm)
+                                   (env slime-docker-env)
                                    (init 'slime-docker--init-command)
-                                   mounts
+                                   (mounts slime-docker-mounts)
                                    coding-system
-                                   (slime-mount-path "/usr/local/share/common-lisp/source/slime/")
-                                   (slime-mount-read-only t)
+                                   (slime-mount-path slime-docker-slime-mount-path)
+                                   (slime-mount-read-only slime-docker-slime-mount-read-only)
                                    (uid slime-docker-uid)
                                    (gid slime-docker-gid)
-                                   docker-machine
-                                   (docker-command "docker")
+                                   (docker-machine slime-docker-docker-machine)
+                                   (docker-command slime-docker-docker-command)
                                    (docker-machine-setenv t)
-                                   security-opts
-                                   userns
-                                   dns
+                                   (security-opts slime-docker-machine-security-opts)
+                                   (userns slime-docker-userns)
+                                   (dns slime-docker-dns)
                                    ports
-                                   network)
+                                   (network slime-docker-network))
   "Start a Docker container and Lisp process in the container then connect to it.
 
 If the slime-tramp contrib is also loaded (highly recommended),
@@ -671,7 +757,7 @@ PORTS is a list of port specifications to open in the docker
   (let* ((mounts (cl-list* `((,(slime-docker--slime-path) . ,slime-mount-path)
                              :read-only ,slime-mount-read-only)
                            mounts))
-         (args (list :program program :program-args program-args
+         (args (list :program (or program inferior-lisp-program) :program-args program-args
                      :directory directory :name name :buffer buffer
                      :image-name image-name :image-tag image-tag
                      :rm rm :env env :init init
@@ -708,7 +794,7 @@ The rules for selecting the arguments are rather complicated:
 
 - In the most common case, i.e. if there's no `prefix-arg' in
   effect and if `slime-docker-implementations' is nil, use
-  `inferior-lisp-program' as fallback.
+  `slime-docker-program' as fallback.
 
 - If the table `slime-docker-implementations' is non-nil use the
   implementation with name `slime-docker-default-lisp' or if
@@ -731,7 +817,8 @@ The rules for selecting the arguments are rather complicated:
           (t
            (cl-destructuring-bind (program &rest program-args)
                (split-string-and-unquote
-                (read-shell-command "Run lisp: " inferior-lisp-program
+                (read-shell-command "Run lisp: " (or slime-docker-program
+                                                     inferior-lisp-program)
                                     'slime-docker--inferior-lisp-program-history))
              (let ((coding-system
                     (if (eq 16 (prefix-numeric-value current-prefix-arg))
@@ -752,7 +839,7 @@ and `slime-docker-default-lisp'.
 
 COMMAND is the command to run in the Docker container."
   (interactive)
-  (let ((inferior-lisp-program (or command inferior-lisp-program)))
+  (let ((inferior-lisp-program (or command slime-docker-program inferior-lisp-program)))
     (slime-docker-start* (cond ((and command (symbolp command))
                                 (slime-docker--lisp-options command))
                                (t (slime-docker--read-interactive-args))))))
