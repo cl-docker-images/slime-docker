@@ -1,5 +1,11 @@
 ## Unreleased
 
+## v0.8.1 - January 24, 2021
+
+### Changed
+
+- Fixed some package-lint issues and byte compilation warnings.
+
 ## v0.8 - January 24, 2021
 
 ### Added

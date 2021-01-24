@@ -1,9 +1,9 @@
-;;; slime-docker.el --- Integration of SLIME with Docker containers. -*- lexical-binding: t; -*-
+;;; slime-docker.el --- Integration of SLIME with Docker containers -*- lexical-binding: t; -*-
 
 ;; URL: https://gitlab.common-lisp.net/cl-docker-images/slime-docker
-;; Package-Requires: ((emacs "24") (slime "2.16") (docker-tramp "0.1") (cl-lib "0.5"))
+;; Package-Requires: ((emacs "24.4") (slime "2.16") (docker-tramp "0.1"))
 ;; Keywords: docker, lisp, slime
-;; Version: 0.8
+;; Version: 0.8.1
 
 
 ;;; License:
@@ -242,7 +242,6 @@ The default value is automatically computed.")
 
 Returns an alist."
   (let ((env-string (slime-docker--machine-get-env-string machine))
-        (count 1)
         (out nil))
     (while (string-match "^\\(export .*=.*\\)$" env-string)
       (let ((subexpr (match-string 1 env-string)))
@@ -680,7 +679,6 @@ machine is being used.  Otherwise simply returns `uid-arg'."
                                    (env slime-docker-env)
                                    (init 'slime-docker--init-command)
                                    (mounts slime-docker-mounts)
-                                   coding-system
                                    (slime-mount-path slime-docker-slime-mount-path)
                                    (slime-mount-read-only slime-docker-slime-mount-read-only)
                                    (uid slime-docker-uid)
@@ -708,7 +706,6 @@ IMAGE-TAG is a string nameing the tag to use. Defaults to
 INIT is a function that should return a string to load and start
   Swank. The function will be called with a plist of all
   arguments passed to `slime-docker-start'
-CODING-SYSTEM is ignored.
 ENV an alist of environment variables to set in the docker
   container.
 BUFFER the name of the buffer to use for the subprocess.
