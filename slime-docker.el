@@ -3,7 +3,7 @@
 ;; URL: https://gitlab.common-lisp.net/cl-docker-images/slime-docker
 ;; Package-Requires: ((emacs "24.4") (slime "2.16") (docker-tramp "0.1"))
 ;; Keywords: docker, lisp, slime
-;; Version: 0.8.1
+;; Version: 0.8.2
 
 
 ;;; License:
@@ -187,6 +187,12 @@ folder)."
 (defcustom slime-docker-network nil
   "The network to run the container on."
   :type 'string
+  :group 'slime-docker)
+
+(defcustom slime-docker-ports nil
+  "The default ports for the container."
+  :type '(repeat
+          (plist :value-type (choice string integer)))
   :group 'slime-docker)
 
 (defcustom slime-docker-uid t
@@ -689,7 +695,7 @@ machine is being used.  Otherwise simply returns `uid-arg'."
                                    (security-opts slime-docker-machine-security-opts)
                                    (userns slime-docker-userns)
                                    (dns slime-docker-dns)
-                                   ports
+                                   (ports slime-docker-ports)
                                    (network slime-docker-network))
   "Start a Docker container and Lisp process in the container then connect to it.
 
