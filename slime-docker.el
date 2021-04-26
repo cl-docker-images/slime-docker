@@ -3,7 +3,7 @@
 ;; URL: https://gitlab.common-lisp.net/cl-docker-images/slime-docker
 ;; Package-Requires: ((emacs "24.4") (slime "2.16") (docker-tramp "0.1"))
 ;; Keywords: docker, lisp, slime
-;; Version: 0.8.2
+;; Version: 0.8.3
 
 
 ;;; License:

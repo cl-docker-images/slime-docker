@@ -1,5 +1,11 @@
 ## Unreleased
 
+## v0.8.3 - April 26, 2021
+
+### Added
+
+- Added `slime-docker-ports` custom variable.
+
 ## v0.8.2 - January 24, 2021
 
 ### Removed
